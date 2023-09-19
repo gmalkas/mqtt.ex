@@ -1,3 +1,3 @@
 [submodule "vendor/vernemq"]
 	path = vendor/vernemq
-	url = https://github.com/vernemq/vernemq.git
+	url = git@github.com:vernemq/vernemq.git
