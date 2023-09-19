@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -e
+
+if test -t 1; then
+    ncolors=$(tput colors)
+    if test -n "$ncolors" && test $ncolors -ge 8; then
+        green="\e[0;92m"
+        reset="\e[0m"
+    fi
+fi
+
+echo -n "Checking Elixir code formatting..."
+mix format --check-formatted
+mix compile --force --warnings-as-errors
+echo -e "${green}[OK]${reset}"
