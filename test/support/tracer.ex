@@ -22,6 +22,10 @@ defmodule MQTT.Test.Tracer do
     read_from_port_until_trace(port, ~s(MQTT RECV: CID: "#{client_id}" CONNECT))
   end
 
+  def wait_for_trace(port, {:connack, client_id}) do
+    read_from_port_until_trace(port, ~s(MQTT SEND: CID: "#{client_id}" CONNACK))
+  end
+
   defp open_port(client_id) do
     Port.open({:spawn_executable, @exec_path},
       args: ["trace", "client", "client-id=#{client_id}"]

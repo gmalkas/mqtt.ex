@@ -1,9 +1,11 @@
 defmodule MQTT.Client do
   require Logger
 
-  @default_port 1883
+  alias MQTT.ClientConn, as: Conn
+  alias MQTT.PacketDecoder
 
-  defstruct [:socket]
+  @default_port 1883
+  @default_read_timeout_ms 500
 
   def connect(ip_address, client_id, options \\ []) do
     port = Keyword.get(options, :port, @default_port)
@@ -17,11 +19,20 @@ defmodule MQTT.Client do
       {:ok, socket} ->
         send_to_socket(socket, encoded_packet)
 
-        {:ok, socket}
+        {:ok, Conn.connecting(ip_address, port, client_id, socket)}
+    end
+  end
+
+  def read_next_packet(%Conn{} = conn) do
+    with {:ok, packet, buffer} <- do_read_next_packet(conn.socket, conn.read_buffer) do
+      next_conn = Conn.handle_packet_from_server(conn, packet, buffer)
+
+      {:ok, packet, next_conn}
     end
   end
 
   # HELPERS
+
   defp tcp_connect(ip_address, port) do
     {:ok, ip_address} =
       ip_address
@@ -30,15 +41,33 @@ defmodule MQTT.Client do
 
     :gen_tcp.connect(ip_address, port, [
       :binary,
-      packet: :line,
       active: false,
       keepalive: true,
       nodelay: true
     ])
   end
 
+  defp read_from_socket(socket) do
+    :gen_tcp.recv(socket, 0, @default_read_timeout_ms)
+  end
+
   defp send_to_socket(socket, packet) do
     Logger.debug("socket=#{inspect(socket)}, action=send, data=#{Base.encode16(packet)}")
     :ok = :gen_tcp.send(socket, packet)
+  end
+
+  defp do_read_next_packet(socket, buffer) do
+    case read_from_socket(socket) do
+      {:ok, data} ->
+        buffer = buffer <> data
+
+        case PacketDecoder.decode(buffer) do
+          {:ok, packet, buffer} -> {:ok, packet, buffer}
+          {:error, :incomplete_packet} -> do_read_next_packet(socket, buffer)
+        end
+
+      {:error, :timeout} ->
+        {:error, :timeout}
+    end
   end
 end
