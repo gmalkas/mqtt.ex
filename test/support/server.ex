@@ -17,13 +17,33 @@ defmodule MQTT.Test.Server do
     port
   end
 
-  def stop!(port) do
-    if !Port.close(port) do
-      raise "Unable to close Port for MQTT Server!"
+  def stop(port) do
+    if !is_nil(Port.info(port)) do
+      Port.close(port)
     end
+
+    terminate_server_process()
   end
 
   defp open_port, do: Port.open({:spawn_executable, @exec_path}, args: ["console"])
+
+  defp terminate_server_process do
+    case System.cmd(@exec_path, ["stop"]) do
+      {_stdout, 0} ->
+        :ok
+
+      {stdout, exit_status} ->
+        if String.contains?(stdout, "Node is not running!") do
+          :ok
+        else
+          Logger.warning(
+            "Unable to terminate MQTT server: exit_status=#{exit_status}, stdout=#{stdout}"
+          )
+
+          :error
+        end
+    end
+  end
 
   defp read_from_port_until_ready(port, buffer \\ "") do
     receive do

@@ -12,14 +12,21 @@ defmodule MQTT.Test.Tracer do
     port
   end
 
-  def stop!(port) do
-    if !Port.close(port) do
-      raise "Unable to close Port for MQTT Server!"
+  def stop(port) do
+    if !is_nil(Port.info(port)) do
+      Port.close(port)
     end
   end
 
   def wait_for_trace(port, {:connect, client_id}) do
     read_from_port_until_trace(port, ~s(MQTT RECV: CID: "#{client_id}" CONNECT))
+  end
+
+  def wait_for_trace(port, {:subscribe, client_id, topic_filter}) do
+    read_from_port_until_trace(
+      port,
+      ~r/MQTT RECV: CID: "#{client_id}" SUBSCRIBE.*\n.*\n\s+t: "#{topic_filter}"/
+    )
   end
 
   def wait_for_trace(port, {:connack, client_id}) do
@@ -43,7 +50,7 @@ defmodule MQTT.Test.Tracer do
 
         buffer = buffer <> to_string(data)
 
-        if String.contains?(buffer, trace) do
+        if match_trace?(buffer, trace) do
           true
         else
           read_from_port_until_trace(port, trace, buffer)
@@ -52,5 +59,13 @@ defmodule MQTT.Test.Tracer do
       @port_read_timeout_ms ->
         false
     end
+  end
+
+  defp match_trace?(data, trace) when is_binary(trace) do
+    String.contains?(data, trace)
+  end
+
+  defp match_trace?(data, %Regex{} = trace) do
+    String.match?(data, trace)
   end
 end

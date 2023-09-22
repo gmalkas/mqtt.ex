@@ -31,6 +31,17 @@ defmodule MQTT.Client do
     end
   end
 
+  def subscribe(%Conn{} = conn, topic_filters) when is_list(topic_filters) do
+    {packet_identifier, conn} = Conn.next_packet_identifier(conn)
+
+    packet = MQTT.PacketBuilder.Subscribe.new(packet_identifier, topic_filters)
+    encoded_packet = MQTT.Packet.Subscribe.encode!(packet)
+
+    send_to_socket(conn.socket, encoded_packet)
+
+    {:ok, conn}
+  end
+
   # HELPERS
 
   defp tcp_connect(ip_address, port) do
