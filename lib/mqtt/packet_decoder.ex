@@ -15,7 +15,7 @@ defmodule MQTT.PacketDecoder do
         "event=decoded_fixed_header, packet_type=#{packet_type}, flags=#{inspect(flags)}, remaining_length=#{remaining_length}"
       )
 
-      decode_packet(packet_type, flags, rest)
+      decode_packet(packet_type, flags, remaining_length, rest)
     end
   end
 
@@ -65,13 +65,18 @@ defmodule MQTT.PacketDecoder do
     decode_variable_byte_integer(data)
   end
 
-  defp decode_packet(:connack, _flags, data) do
+  defp decode_packet(:connack, _flags, _, data) do
     Packet.Connack.decode(data)
   end
 
+  defp decode_packet(:suback, _flags, remaining_length, data) do
+    Packet.Suback.decode(data, remaining_length)
+  end
+
   def decode_properties(data) do
-    with {:ok, length, rest} <- decode_variable_byte_integer(data) do
-      decode_properties(rest, length)
+    with {:ok, length, rest} <- decode_variable_byte_integer(data),
+         {:ok, properties, rest} <- decode_properties(rest, length) do
+      {:ok, properties, length + Packet.wire_byte_size({:variable_byte_integer, length}), rest}
     end
   end
 
@@ -240,5 +245,18 @@ defmodule MQTT.PacketDecoder do
 
   def decode_variable_byte_integer(rest, _values) when bit_size(rest) < 8 do
     {:error, :incomplete}
+  end
+
+  def decode_packet_identifier(data), do: decode_two_byte_integer(data)
+
+  def decode_reason_code(packet_type, <<reason_code::8>> <> rest) do
+    case Packet.reason_code_name_by_packet_type_and_value(packet_type, reason_code) do
+      {:ok, name} -> {:ok, name, rest}
+      :error -> {:error, :unknown_reason_code, rest}
+    end
+  end
+
+  def decode_reason_code(_, data) when byte_size(data) < 1 do
+    {:error, :incomplete, data}
   end
 end

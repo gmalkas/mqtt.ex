@@ -17,17 +17,16 @@ defmodule MQTT.Client do
 
     case tcp_connect(ip_address, port) do
       {:ok, socket} ->
-        send_to_socket(socket, encoded_packet)
+        send_to_socket!(socket, encoded_packet)
 
         {:ok, Conn.connecting(ip_address, port, client_id, socket)}
     end
   end
 
   def read_next_packet(%Conn{} = conn) do
-    with {:ok, packet, buffer} <- do_read_next_packet(conn.socket, conn.read_buffer) do
-      next_conn = Conn.handle_packet_from_server(conn, packet, buffer)
-
-      {:ok, packet, next_conn}
+    with {:ok, packet, buffer} <- do_read_next_packet(conn.socket, conn.read_buffer),
+         {:ok, conn} <- Conn.handle_packet_from_server(conn, packet, buffer) do
+      {:ok, packet, conn}
     end
   end
 
@@ -37,7 +36,7 @@ defmodule MQTT.Client do
     packet = MQTT.PacketBuilder.Subscribe.new(packet_identifier, topic_filters)
     encoded_packet = MQTT.Packet.Subscribe.encode!(packet)
 
-    send_to_socket(conn.socket, encoded_packet)
+    send_to_socket!(conn.socket, encoded_packet)
 
     {:ok, conn}
   end
@@ -62,7 +61,7 @@ defmodule MQTT.Client do
     :gen_tcp.recv(socket, 0, @default_read_timeout_ms)
   end
 
-  defp send_to_socket(socket, packet) do
+  defp send_to_socket!(socket, packet) do
     Logger.debug("socket=#{inspect(socket)}, action=send, data=#{Base.encode16(packet)}")
     :ok = :gen_tcp.send(socket, packet)
   end
@@ -70,6 +69,7 @@ defmodule MQTT.Client do
   defp do_read_next_packet(socket, buffer) do
     case read_from_socket(socket) do
       {:ok, data} ->
+        Logger.debug("socket=#{inspect(socket)}, action=read, data=#{Base.encode16(data)}")
         buffer = buffer <> data
 
         case PacketDecoder.decode(buffer) do

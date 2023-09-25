@@ -11,6 +11,13 @@ defmodule MQTT.Error do
     new(:malformed_packet, ErrorContext.MalformedPacket.new(reason))
   end
 
+  def packet_identifier_not_found(packet_identifier) do
+    new(
+      :packet_identifier_not_found,
+      ErrorContext.PacketIdentifierNotFound.new(packet_identifier)
+    )
+  end
+
   def new(reason_code_name, context) do
     %__MODULE__{reason_code_name: reason_code_name, context: context}
   end
@@ -32,5 +39,13 @@ defmodule MQTT.ErrorContext.MalformedPacket do
 
   def new(reason) when is_nil(reason) or is_binary(reason) do
     %__MODULE__{reason: reason}
+  end
+end
+
+defmodule MQTT.ErrorContext.PacketIdentifierNotFound do
+  defstruct [:packet_identifier]
+
+  def new(packet_identifier) do
+    %__MODULE__{packet_identifier: packet_identifier}
   end
 end

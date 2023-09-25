@@ -44,8 +44,9 @@ defmodule MQTT.Packet do
                     |> Map.new()
   @property_names Enum.map(@property_by_identifier, fn {_, {name, _}} -> name end)
 
-  @reason_code_name_by_value %{
-    0 => :success,
+  @reason_code_name_by_packet_type_and_value %{
+    {:connack, 0} => :success,
+    {:suback, 0} => :granted_qos_0,
     128 => :unspecified_error,
     129 => :malformed_packet,
     130 => :protocol_error,
@@ -78,7 +79,13 @@ defmodule MQTT.Packet do
 
   def packet_type_from_value(value), do: Map.fetch(@packet_type_by_value, value)
 
-  def reason_code_name_by_value(value) do
-    Map.fetch(@reason_code_name_by_value, value)
+  def reason_code_name_by_packet_type_and_value(packet_type, value) do
+    Map.fetch(@reason_code_name_by_packet_type_and_value, {packet_type, value})
   end
+
+  def wire_byte_size(:packet_identifier), do: 2
+  def wire_byte_size({:variable_byte_integer, value}) when value <= 0x7F, do: 1
+  def wire_byte_size({:variable_byte_integer, value}) when value <= 0xFF7F, do: 2
+  def wire_byte_size({:variable_byte_integer, value}) when value <= 0xFFFF7F, do: 3
+  def wire_byte_size({:variable_byte_integer, value}) when value <= 0xFFFFFF7F, do: 4
 end

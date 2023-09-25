@@ -17,7 +17,7 @@ defmodule MQTT.ClientTest do
   end
 
   describe "connect/3" do
-    test "connects to a MQTT server over TCP and handles CONNACK" do
+    test "connects to a MQTT server over TCP" do
       {:ok, conn, tracer_port} = connect()
 
       assert :connecting = conn.state
@@ -45,6 +45,17 @@ defmodule MQTT.ClientTest do
                tracer_port,
                {:subscribe, conn.client_id, topic_filter}
              )
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:suback, conn.client_id}
+             )
+
+      expected_reason_code = :granted_qos_0
+
+      assert {:ok, %Packet.Suback{} = packet, conn} = MQTT.Client.read_next_packet(conn)
+      assert [^expected_reason_code] = packet.payload.reason_codes
+      assert 0 = MapSet.size(conn.packet_identifiers)
     end
   end
 

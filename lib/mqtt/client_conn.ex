@@ -1,5 +1,5 @@
 defmodule MQTT.ClientConn do
-  alias MQTT.Packet
+  alias MQTT.{Error, Packet}
 
   @max_packet_identifier 0xFFFF
 
@@ -18,7 +18,20 @@ defmodule MQTT.ClientConn do
   end
 
   def handle_packet_from_server(%__MODULE__{} = conn, %Packet.Connack{} = _packet, buffer) do
-    %__MODULE__{conn | state: :connected, read_buffer: buffer}
+    {:ok, %__MODULE__{conn | state: :connected, read_buffer: buffer}}
+  end
+
+  def handle_packet_from_server(%__MODULE__{} = conn, %Packet.Suback{} = packet, buffer) do
+    if MapSet.member?(conn.packet_identifiers, packet.packet_identifier) do
+      {:ok,
+       %__MODULE__{
+         conn
+         | packet_identifiers: MapSet.delete(conn.packet_identifiers, packet.packet_identifier),
+           read_buffer: buffer
+       }}
+    else
+      {:error, Error.packet_identifier_not_found(packet.packet_identifier)}
+    end
   end
 
   def next_packet_identifier(%__MODULE__{} = conn) do
