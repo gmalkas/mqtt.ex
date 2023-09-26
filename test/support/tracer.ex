@@ -37,6 +37,17 @@ defmodule MQTT.Test.Tracer do
     read_from_port_until_trace(port, ~s(MQTT SEND: CID: "#{client_id}" SUBACK))
   end
 
+  def wait_for_trace(port, {:publish, client_id, topic_name}) do
+    read_from_port_until_trace(
+      port,
+      ~r/MQTT RECV: CID: "#{Regex.escape(client_id)}" PUBLISH.*"#{Regex.escape(topic_name)}"/
+    )
+  end
+
+  def wait_for_trace(port, {:puback, client_id}) do
+    read_from_port_until_trace(port, ~s(MQTT SEND: CID: "#{client_id}" PUBACK))
+  end
+
   defp open_port(client_id) do
     Port.open({:spawn_executable, @exec_path},
       args: ["trace", "client", "client-id=#{client_id}"]

@@ -73,6 +73,10 @@ defmodule MQTT.PacketDecoder do
     Packet.Suback.decode(data, remaining_length)
   end
 
+  defp decode_packet(:puback, _flags, remaining_length, data) do
+    Packet.Puback.decode(data, remaining_length)
+  end
+
   def decode_properties(data) do
     with {:ok, length, rest} <- decode_variable_byte_integer(data),
          {:ok, properties, rest} <- decode_properties(rest, length) do

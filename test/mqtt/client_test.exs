@@ -59,6 +59,35 @@ defmodule MQTT.ClientTest do
     end
   end
 
+  describe "publish/2" do
+    test "sends a PUBLISH packet with the application message" do
+      {:ok, conn, tracer_port} = connect_and_wait_for_connack()
+
+      on_exit(fn ->
+        MQTT.Test.Tracer.stop(tracer_port)
+      end)
+
+      topic = "/my/topic"
+      payload = "Hello world!"
+
+      assert {:ok, conn} = MQTT.Client.publish(conn, topic, payload, qos: 1)
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:publish, conn.client_id, topic}
+             )
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:puback, conn.client_id}
+             )
+
+      assert {:ok, %Packet.Puback{} = packet, conn} = MQTT.Client.read_next_packet(conn)
+      assert :success = packet.reason_code
+      assert 0 = MapSet.size(conn.packet_identifiers)
+    end
+  end
+
   defp connect(client_id \\ generate_client_id()) do
     tracer_port = MQTT.Test.Tracer.start!(client_id)
 

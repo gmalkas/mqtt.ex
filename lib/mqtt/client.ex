@@ -23,6 +23,24 @@ defmodule MQTT.Client do
     end
   end
 
+  def publish(%Conn{} = conn, topic, payload, options \\ []) do
+    qos = Keyword.get(options, :qos, 0)
+
+    {packet_identifier, conn} =
+      if qos > 0 do
+        Conn.next_packet_identifier(conn)
+      else
+        {nil, conn}
+      end
+
+    packet = MQTT.PacketBuilder.Publish.new(packet_identifier, topic, payload, options)
+    encoded_packet = MQTT.Packet.Publish.encode!(packet)
+
+    send_to_socket!(conn.socket, encoded_packet)
+
+    {:ok, conn}
+  end
+
   def read_next_packet(%Conn{} = conn) do
     with {:ok, packet, buffer} <- do_read_next_packet(conn.socket, conn.read_buffer),
          {:ok, conn} <- Conn.handle_packet_from_server(conn, packet, buffer) do
@@ -62,14 +80,20 @@ defmodule MQTT.Client do
   end
 
   defp send_to_socket!(socket, packet) do
-    Logger.debug("socket=#{inspect(socket)}, action=send, data=#{Base.encode16(packet)}")
+    Logger.debug(
+      "socket=#{inspect(socket)}, action=send, size=#{byte_size(packet)}, data=#{Base.encode16(packet)}"
+    )
+
     :ok = :gen_tcp.send(socket, packet)
   end
 
   defp do_read_next_packet(socket, buffer) do
     case read_from_socket(socket) do
       {:ok, data} ->
-        Logger.debug("socket=#{inspect(socket)}, action=read, data=#{Base.encode16(data)}")
+        Logger.debug(
+          "socket=#{inspect(socket)}, action=read, size=#{byte_size(data)}, data=#{Base.encode16(data)}"
+        )
+
         buffer = buffer <> data
 
         case PacketDecoder.decode(buffer) do
