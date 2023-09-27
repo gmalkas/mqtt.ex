@@ -54,6 +54,12 @@ defmodule MQTT.PacketEncoder do
     property_length <> encoded_properties
   end
 
+  def encode_reason_code(name) do
+    reason_code = Packet.reason_code_by_name!(name)
+
+    <<reason_code::8>>
+  end
+
   defp encode_property({name, value}) do
     {property_identifier, property_type} = Packet.property_by_name!(name)
 

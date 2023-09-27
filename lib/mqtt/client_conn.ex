@@ -17,6 +17,10 @@ defmodule MQTT.ClientConn do
     }
   end
 
+  def disconnect(%__MODULE__{} = conn) do
+    {:ok, %__MODULE__{conn | state: :disconnected}}
+  end
+
   def handle_packet_from_server(%__MODULE__{} = conn, %Packet.Connack{} = _packet, buffer) do
     {:ok, %__MODULE__{conn | state: :connected, read_buffer: buffer}}
   end

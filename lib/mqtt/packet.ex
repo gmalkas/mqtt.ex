@@ -46,29 +46,14 @@ defmodule MQTT.Packet do
 
   @reason_code_name_by_packet_type_and_value %{
     {:connack, 0} => :success,
-    {:suback, 0} => :granted_qos_0,
-    128 => :unspecified_error,
-    129 => :malformed_packet,
-    130 => :protocol_error,
-    131 => :implementation_specific_error,
-    132 => :unsupported_protocol_error,
-    133 => :client_identifier_not_valid,
-    134 => :bad_user_name_or_password,
-    135 => :not_authorized,
-    136 => :server_unavailable,
-    137 => :server_busy,
-    138 => :banned,
-    140 => :bad_authentication_method,
-    144 => :topic_name_invalid,
-    149 => :packet_too_large,
-    151 => :quota_exceeded,
-    153 => :payload_format_invalid,
-    154 => :retain_not_supported,
-    155 => :qos_not_supported,
-    156 => :use_another_server,
-    157 => :server_moved,
-    159 => :connection_rate_exceeded
+    {:puback, 0} => :success,
+    {:disconnect, 0} => :normal_disconnection,
+    {:suback, 0} => :granted_qos_0
   }
+  @reason_code_by_name Enum.map(@reason_code_name_by_packet_type_and_value, fn {{_, value}, name} ->
+                         {name, value}
+                       end)
+                       |> Map.new()
 
   def property_by_name!(name), do: Map.fetch!(@property_by_name, name)
   def property_names, do: @property_names
@@ -81,6 +66,10 @@ defmodule MQTT.Packet do
 
   def reason_code_name_by_packet_type_and_value(packet_type, value) do
     Map.fetch(@reason_code_name_by_packet_type_and_value, {packet_type, value})
+  end
+
+  def reason_code_by_name!(name) do
+    Map.fetch!(@reason_code_by_name, name)
   end
 
   def wire_byte_size(:packet_identifier), do: 2

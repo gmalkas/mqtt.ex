@@ -88,6 +88,25 @@ defmodule MQTT.ClientTest do
     end
   end
 
+  describe "disconnect/1" do
+    test "sends a DISCONNECT packet" do
+      {:ok, conn, tracer_port} = connect_and_wait_for_connack()
+
+      on_exit(fn ->
+        MQTT.Test.Tracer.stop(tracer_port)
+      end)
+
+      assert {:ok, conn} = MQTT.Client.disconnect(conn)
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:disconnect, conn.client_id}
+             )
+
+      assert :disconnected = conn.state
+    end
+  end
+
   defp connect(client_id \\ generate_client_id()) do
     tracer_port = MQTT.Test.Tracer.start!(client_id)
 

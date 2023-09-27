@@ -2,7 +2,7 @@ defmodule MQTT.Client do
   require Logger
 
   alias MQTT.ClientConn, as: Conn
-  alias MQTT.PacketDecoder
+  alias MQTT.{Packet, PacketBuilder, PacketDecoder}
 
   @default_port 1883
   @default_read_timeout_ms 500
@@ -10,8 +10,8 @@ defmodule MQTT.Client do
   def connect(ip_address, client_id, options \\ []) do
     port = Keyword.get(options, :port, @default_port)
 
-    packet = MQTT.PacketBuilder.Connect.new(client_id)
-    encoded_packet = MQTT.Packet.Connect.encode!(packet)
+    packet = PacketBuilder.Connect.new(client_id)
+    encoded_packet = Packet.Connect.encode!(packet)
 
     Logger.info("ip_address=#{ip_address}, port=#{port}, action=connect")
 
@@ -21,6 +21,16 @@ defmodule MQTT.Client do
 
         {:ok, Conn.connecting(ip_address, port, client_id, socket)}
     end
+  end
+
+  def disconnect(%Conn{} = conn) do
+    packet = PacketBuilder.Disconnect.new(:normal_disconnection)
+    encoded_packet = Packet.Disconnect.encode!(packet)
+
+    send_to_socket!(conn.socket, encoded_packet)
+    close_socket!(conn.socket)
+
+    Conn.disconnect(conn)
   end
 
   def publish(%Conn{} = conn, topic, payload, options \\ []) do
@@ -33,8 +43,8 @@ defmodule MQTT.Client do
         {nil, conn}
       end
 
-    packet = MQTT.PacketBuilder.Publish.new(packet_identifier, topic, payload, options)
-    encoded_packet = MQTT.Packet.Publish.encode!(packet)
+    packet = PacketBuilder.Publish.new(packet_identifier, topic, payload, options)
+    encoded_packet = Packet.Publish.encode!(packet)
 
     send_to_socket!(conn.socket, encoded_packet)
 
@@ -51,8 +61,8 @@ defmodule MQTT.Client do
   def subscribe(%Conn{} = conn, topic_filters) when is_list(topic_filters) do
     {packet_identifier, conn} = Conn.next_packet_identifier(conn)
 
-    packet = MQTT.PacketBuilder.Subscribe.new(packet_identifier, topic_filters)
-    encoded_packet = MQTT.Packet.Subscribe.encode!(packet)
+    packet = PacketBuilder.Subscribe.new(packet_identifier, topic_filters)
+    encoded_packet = Packet.Subscribe.encode!(packet)
 
     send_to_socket!(conn.socket, encoded_packet)
 
@@ -105,4 +115,6 @@ defmodule MQTT.Client do
         {:error, :timeout}
     end
   end
+
+  defp close_socket!(socket), do: :ok = :gen_tcp.close(socket)
 end
