@@ -46,9 +46,11 @@ defmodule MQTT.Packet do
 
   @reason_code_name_by_packet_type_and_value %{
     {:connack, 0} => :success,
+    {:connack, 134} => :bad_user_name_or_password,
     {:puback, 0} => :success,
     {:disconnect, 0} => :normal_disconnection,
-    {:suback, 0} => :granted_qos_0
+    {:suback, 0} => :granted_qos_0,
+    {:unsuback, 0} => :success
   }
   @reason_code_by_name Enum.map(@reason_code_name_by_packet_type_and_value, fn {{_, value}, name} ->
                          {name, value}

@@ -77,6 +77,10 @@ defmodule MQTT.PacketDecoder do
     Packet.Suback.decode(data, remaining_length)
   end
 
+  defp decode_packet(:unsuback, _flags, remaining_length, data) do
+    Packet.Unsuback.decode(data, remaining_length)
+  end
+
   defp decode_packet(:publish, flags, remaining_length, data) do
     Packet.Publish.decode(data, flags, remaining_length)
   end

@@ -55,6 +55,41 @@ defmodule MQTT.ClientTest do
     end
   end
 
+  describe "unsubscribe/2" do
+    test "sends a UNSUBSCRIBE packet with the topic filters" do
+      {:ok, conn, tracer_port} = connect_and_wait_for_connack()
+
+      topic_filter_1 = "/my/topic"
+
+      assert {:ok, conn} = MQTT.Client.subscribe(conn, [topic_filter_1])
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:suback, conn.client_id}
+             )
+
+      assert {:ok, %Packet.Suback{}, conn} = MQTT.Client.read_next_packet(conn)
+
+      assert {:ok, conn} = MQTT.Client.unsubscribe(conn, [topic_filter_1])
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:unsubscribe, conn.client_id, topic_filter_1}
+             )
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:unsuback, conn.client_id}
+             )
+
+      expected_reason_codes = [:success]
+
+      assert {:ok, %Packet.Unsuback{} = packet, conn} = MQTT.Client.read_next_packet(conn)
+      assert ^expected_reason_codes = packet.payload.reason_codes
+      assert 0 = MapSet.size(conn.packet_identifiers)
+    end
+  end
+
   describe "publish/2" do
     test "sends a PUBLISH packet with the application message" do
       {:ok, conn, tracer_port} = connect_and_wait_for_connack()

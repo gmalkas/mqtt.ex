@@ -46,6 +46,19 @@ defmodule MQTT.ClientConn do
     end
   end
 
+  def handle_packet_from_server(%__MODULE__{} = conn, %Packet.Unsuback{} = packet, buffer) do
+    if MapSet.member?(conn.packet_identifiers, packet.packet_identifier) do
+      {:ok,
+       %__MODULE__{
+         conn
+         | packet_identifiers: MapSet.delete(conn.packet_identifiers, packet.packet_identifier),
+           read_buffer: buffer
+       }}
+    else
+      {:error, Error.packet_identifier_not_found(packet.packet_identifier)}
+    end
+  end
+
   def handle_packet_from_server(%__MODULE__{} = conn, %Packet.Puback{} = packet, buffer) do
     if MapSet.member?(conn.packet_identifiers, packet.packet_identifier) do
       {:ok,

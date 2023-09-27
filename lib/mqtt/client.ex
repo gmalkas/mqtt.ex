@@ -78,6 +78,17 @@ defmodule MQTT.Client do
     {:ok, conn}
   end
 
+  def unsubscribe(%Conn{} = conn, topic_filters) when is_list(topic_filters) do
+    {packet_identifier, conn} = Conn.next_packet_identifier(conn)
+
+    packet = PacketBuilder.Unsubscribe.new(packet_identifier, topic_filters)
+    encoded_packet = Packet.Unsubscribe.encode!(packet)
+
+    send_to_socket!(conn.socket, encoded_packet)
+
+    {:ok, conn}
+  end
+
   # HELPERS
 
   defp tcp_connect(ip_address, port) do

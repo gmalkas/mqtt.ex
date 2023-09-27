@@ -29,12 +29,23 @@ defmodule MQTT.Test.Tracer do
     )
   end
 
+  def wait_for_trace(port, {:unsubscribe, client_id, topic_filter}) do
+    read_from_port_until_trace(
+      port,
+      ~r/MQTT RECV: CID: "#{Regex.escape(client_id)}" UNSUBSCRIBE.*\n\s+t: "#{Regex.escape(topic_filter)}"/
+    )
+  end
+
   def wait_for_trace(port, {:connack, client_id}) do
     read_from_port_until_trace(port, ~s(MQTT SEND: CID: "#{client_id}" CONNACK))
   end
 
   def wait_for_trace(port, {:suback, client_id}) do
     read_from_port_until_trace(port, ~s(MQTT SEND: CID: "#{client_id}" SUBACK))
+  end
+
+  def wait_for_trace(port, {:unsuback, client_id}) do
+    read_from_port_until_trace(port, ~s(MQTT SEND: CID: "#{client_id}" UNSUBACK))
   end
 
   def wait_for_trace(port, {:publish, client_id, topic_name}) do
