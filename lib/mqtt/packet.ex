@@ -73,6 +73,7 @@ defmodule MQTT.Packet do
   end
 
   def wire_byte_size(:packet_identifier), do: 2
+  def wire_byte_size({:utf8_string, value}) when is_binary(value), do: 2 + byte_size(value)
   def wire_byte_size({:variable_byte_integer, value}) when value <= 0x7F, do: 1
   def wire_byte_size({:variable_byte_integer, value}) when value <= 0xFF7F, do: 2
   def wire_byte_size({:variable_byte_integer, value}) when value <= 0xFFFF7F, do: 3

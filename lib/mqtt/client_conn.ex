@@ -25,6 +25,10 @@ defmodule MQTT.ClientConn do
     {:ok, %__MODULE__{conn | state: :connected, read_buffer: buffer}}
   end
 
+  def handle_packet_from_server(%__MODULE__{} = conn, %Packet.Publish{} = _packet, buffer) do
+    {:ok, %__MODULE__{conn | read_buffer: buffer}}
+  end
+
   def handle_packet_from_server(%__MODULE__{} = conn, %Packet.Suback{} = packet, buffer) do
     if MapSet.member?(conn.packet_identifiers, packet.packet_identifier) do
       {:ok,

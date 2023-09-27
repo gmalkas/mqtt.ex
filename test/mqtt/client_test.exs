@@ -33,10 +33,6 @@ defmodule MQTT.ClientTest do
     test "sends a SUBSCRIBE packet with the topic filters" do
       {:ok, conn, tracer_port} = connect_and_wait_for_connack()
 
-      on_exit(fn ->
-        MQTT.Test.Tracer.stop(tracer_port)
-      end)
-
       topic_filter = "/my/topic"
 
       assert {:ok, conn} = MQTT.Client.subscribe(conn, [topic_filter])
@@ -63,10 +59,6 @@ defmodule MQTT.ClientTest do
     test "sends a PUBLISH packet with the application message" do
       {:ok, conn, tracer_port} = connect_and_wait_for_connack()
 
-      on_exit(fn ->
-        MQTT.Test.Tracer.stop(tracer_port)
-      end)
-
       topic = "/my/topic"
       payload = "Hello world!"
 
@@ -92,10 +84,6 @@ defmodule MQTT.ClientTest do
     test "sends a DISCONNECT packet" do
       {:ok, conn, tracer_port} = connect_and_wait_for_connack()
 
-      on_exit(fn ->
-        MQTT.Test.Tracer.stop(tracer_port)
-      end)
-
       assert {:ok, conn} = MQTT.Client.disconnect(conn)
 
       assert MQTT.Test.Tracer.wait_for_trace(
@@ -104,6 +92,34 @@ defmodule MQTT.ClientTest do
              )
 
       assert :disconnected = conn.state
+    end
+  end
+
+  describe "subscribing to a topic and receiving application messages" do
+    test "reads PUBLISH packets from the server after subscribing" do
+      {:ok, conn, tracer_port} = connect_and_wait_for_connack()
+
+      topic = "/my/topic"
+      application_message = "Hello world!"
+
+      assert {:ok, conn} = MQTT.Client.subscribe(conn, [topic])
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:suback, conn.client_id}
+             )
+
+      assert {:ok, %Packet.Suback{}, conn} = MQTT.Client.read_next_packet(conn)
+
+      assert {:ok, conn} = MQTT.Client.publish(conn, topic, application_message)
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:publish, conn.client_id, topic}
+             )
+
+      assert {:ok, %Packet.Publish{} = packet, _conn} = MQTT.Client.read_next_packet(conn)
+      assert application_message == packet.payload.data
     end
   end
 

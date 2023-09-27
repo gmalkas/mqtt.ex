@@ -43,7 +43,7 @@ defmodule MQTT.PacketDecoder do
   defp decode_header_flags(:connect, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
   defp decode_header_flags(:connack, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
 
-  defp decode_header_flags(:publish, <<dup, qos::2, retain>>),
+  defp decode_header_flags(:publish, <<dup::1, qos::2, retain::1>>),
     do: {:ok, %{dup: dup, qos: qos, retain: retain}}
 
   defp decode_header_flags(:puback, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
@@ -71,6 +71,10 @@ defmodule MQTT.PacketDecoder do
 
   defp decode_packet(:suback, _flags, remaining_length, data) do
     Packet.Suback.decode(data, remaining_length)
+  end
+
+  defp decode_packet(:publish, flags, remaining_length, data) do
+    Packet.Publish.decode(data, flags, remaining_length)
   end
 
   defp decode_packet(:puback, _flags, remaining_length, data) do
