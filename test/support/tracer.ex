@@ -52,6 +52,14 @@ defmodule MQTT.Test.Tracer do
     read_from_port_until_trace(port, ~s(MQTT RECV: CID: "#{client_id}" DISCONNECT))
   end
 
+  def wait_for_trace(port, {:pingreq, client_id}) do
+    read_from_port_until_trace(port, ~s(MQTT RECV: CID: "#{client_id}" PINGREQ))
+  end
+
+  def wait_for_trace(port, {:pingresp, client_id}) do
+    read_from_port_until_trace(port, ~s(MQTT SEND: CID: "#{client_id}" PINGRESP))
+  end
+
   defp open_port(client_id) do
     Port.open({:spawn_executable, @exec_path},
       args: ["trace", "client", "client-id=#{client_id}"]

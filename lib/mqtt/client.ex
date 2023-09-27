@@ -33,6 +33,15 @@ defmodule MQTT.Client do
     Conn.disconnect(conn)
   end
 
+  def ping(%Conn{} = conn) do
+    packet = PacketBuilder.Pingreq.new()
+    encoded_packet = Packet.Pingreq.encode!(packet)
+
+    send_to_socket!(conn.socket, encoded_packet)
+
+    {:ok, conn}
+  end
+
   def publish(%Conn{} = conn, topic, payload, options \\ []) do
     qos = Keyword.get(options, :qos, 0)
 

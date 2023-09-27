@@ -69,6 +69,10 @@ defmodule MQTT.PacketDecoder do
     Packet.Connack.decode(data)
   end
 
+  defp decode_packet(:pingresp, _flags, remaining_length, data) do
+    Packet.Pingresp.decode(data, remaining_length)
+  end
+
   defp decode_packet(:suback, _flags, remaining_length, data) do
     Packet.Suback.decode(data, remaining_length)
   end

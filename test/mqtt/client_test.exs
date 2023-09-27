@@ -95,6 +95,26 @@ defmodule MQTT.ClientTest do
     end
   end
 
+  describe "ping/1" do
+    test "sends a PINGREQ packet" do
+      {:ok, conn, tracer_port} = connect_and_wait_for_connack()
+
+      assert {:ok, conn} = MQTT.Client.ping(conn)
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:pingreq, conn.client_id}
+             )
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:pingresp, conn.client_id}
+             )
+
+      assert {:ok, %Packet.Pingresp{}, _conn} = MQTT.Client.read_next_packet(conn)
+    end
+  end
+
   describe "subscribing to a topic and receiving application messages" do
     test "reads PUBLISH packets from the server after subscribing" do
       {:ok, conn, tracer_port} = connect_and_wait_for_connack()
