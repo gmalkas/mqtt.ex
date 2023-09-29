@@ -12,12 +12,6 @@ defmodule MQTT.Test.Tracer do
     port
   end
 
-  def stop(port) do
-    if !is_nil(Port.info(port)) do
-      Port.close(port)
-    end
-  end
-
   def wait_for_trace(port, {:connect, client_id}) do
     read_from_port_until_trace(port, ~s(MQTT RECV: CID: "#{client_id}" CONNECT))
   end
@@ -72,8 +66,9 @@ defmodule MQTT.Test.Tracer do
   end
 
   defp open_port(client_id) do
-    Port.open({:spawn_executable, @exec_path},
-      args: ["trace", "client", "client-id=#{client_id}"]
+    Port.open(
+      {:spawn_executable, @exec_path},
+      [:binary, :exit_status, args: ["trace", "client", "client-id=#{client_id}"]]
     )
   end
 
@@ -86,7 +81,7 @@ defmodule MQTT.Test.Tracer do
       {^port, {:data, data}} ->
         Logger.debug("#{inspect(port)}: data=#{inspect(data)}")
 
-        buffer = buffer <> to_string(data)
+        buffer = buffer <> data
 
         if match_trace?(buffer, trace) do
           true

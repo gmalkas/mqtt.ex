@@ -25,7 +25,7 @@ defmodule MQTT.Test.Server do
     terminate_server_process()
   end
 
-  defp open_port, do: Port.open({:spawn_executable, @exec_path}, args: ["console"])
+  defp open_port, do: Port.open({:spawn_executable, @exec_path}, [:binary, args: ["console"]])
 
   defp terminate_server_process do
     case System.cmd(@exec_path, ["stop"]) do
@@ -48,7 +48,7 @@ defmodule MQTT.Test.Server do
   defp read_from_port_until_ready(port, buffer \\ "") do
     receive do
       {^port, {:data, data}} ->
-        buffer = buffer <> to_string(data)
+        buffer = buffer <> data
 
         if String.contains?(buffer, @server_ready_message) do
           :ok
@@ -64,7 +64,7 @@ defmodule MQTT.Test.Server do
   defp read_from_port_for_logging(port, buffer \\ "") do
     receive do
       {^port, {:data, data}} ->
-        buffer = buffer <> to_string(data)
+        buffer = buffer <> data
 
         {lines, [buffer]} =
           buffer

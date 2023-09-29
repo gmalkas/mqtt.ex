@@ -181,10 +181,6 @@ defmodule MQTT.ClientTest do
   defp connect(client_id \\ generate_client_id()) do
     tracer_port = MQTT.Test.Tracer.start!(client_id)
 
-    on_exit(fn ->
-      MQTT.Test.Tracer.stop(tracer_port)
-    end)
-
     {:ok, conn} = MQTT.Client.connect(@ip_address, client_id)
 
     {:ok, conn, tracer_port}
