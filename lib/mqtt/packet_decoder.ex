@@ -125,6 +125,8 @@ defmodule MQTT.PacketDecoder do
     end
   end
 
+  defp decode_property(:utf8_string, data), do: decode_utf8_string(data)
+
   defp decode_property(:session_expiry_interval, data) do
     decode_four_byte_integer(data)
   end

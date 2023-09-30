@@ -28,6 +28,16 @@ defmodule MQTT.ClientTest do
       assert :connected = conn.state
     end
 
+    test "supports receiving client ID from server" do
+      {:ok, conn} = connect(client_id: nil, tracer?: false)
+
+      assert {:ok, %Packet.Connack{} = packet, conn} = MQTT.Client.read_next_packet(conn)
+      assert :success = packet.connect_reason_code
+      refute is_nil(packet.properties.assigned_client_identifier)
+      assert packet.properties.assigned_client_identifier == conn.client_id
+      assert :connected = conn.state
+    end
+
     test "supports username/password authentication" do
       user_name = "mqttex_basic"
 

@@ -4,7 +4,14 @@ defmodule MQTT.PacketBuilder.Connect do
   @default_protocol_name "MQTT"
   @default_protocol_version 5
 
-  def new(client_id) when is_binary(client_id) do
+  def new(client_id) do
+    client_id =
+      if is_nil(client_id) do
+        ""
+      else
+        client_id
+      end
+
     %Connect{
       protocol_name: @default_protocol_name,
       protocol_version: @default_protocol_version,

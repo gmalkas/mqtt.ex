@@ -21,8 +21,15 @@ defmodule MQTT.ClientConn do
     {:ok, %__MODULE__{conn | state: :disconnected}}
   end
 
-  def handle_packet_from_server(%__MODULE__{} = conn, %Packet.Connack{} = _packet, buffer) do
-    {:ok, %__MODULE__{conn | state: :connected, read_buffer: buffer}}
+  def handle_packet_from_server(%__MODULE__{} = conn, %Packet.Connack{} = packet, buffer) do
+    client_id =
+      if !is_nil(packet.properties.assigned_client_identifier) do
+        packet.properties.assigned_client_identifier
+      else
+        conn.client_id
+      end
+
+    {:ok, %__MODULE__{conn | state: :connected, client_id: client_id, read_buffer: buffer}}
   end
 
   def handle_packet_from_server(%__MODULE__{} = conn, %Packet.Publish{} = _packet, buffer) do

@@ -27,6 +27,7 @@ defmodule MQTT.Packet do
     8 => {:response_topic, :binary},
     9 => {:correlation_data, :variable_byte_integer},
     17 => {:session_expiry_interval, :four_byte_integer},
+    18 => {:assigned_client_identifier, :utf8_string},
     21 => {:authentication_method, :utf8_string},
     22 => {:authentication_data, :binary},
     23 => {:request_problem_information, :byte},

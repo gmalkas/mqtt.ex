@@ -3,8 +3,8 @@ defmodule MQTT.Error do
 
   defstruct [:reason_code_name, :context]
 
-  def invalid_properties(property_name, reason) do
-    new(:protocol_error, ErrorContext.InvalidProperties.new(property_name, reason))
+  def duplicated_property(property_name, value_count) do
+    new(:protocol_error, ErrorContext.DuplicatedProperty.new(property_name, value_count))
   end
 
   def malformed_packet(reason \\ nil) do
@@ -23,14 +23,14 @@ defmodule MQTT.Error do
   end
 end
 
-defmodule MQTT.ErrorContext.InvalidProperties do
+defmodule MQTT.ErrorContext.DuplicatedProperty do
   @property_names MQTT.Packet.property_names()
 
-  defstruct [:property_name, :reason]
+  defstruct [:property_name, :value_count]
 
-  def new(property_name, reason)
-      when property_name in @property_names and is_binary(reason) do
-    %__MODULE__{property_name: property_name, reason: reason}
+  def new(property_name, value_count)
+      when property_name in @property_names do
+    %__MODULE__{property_name: property_name, value_count: value_count}
   end
 end
 

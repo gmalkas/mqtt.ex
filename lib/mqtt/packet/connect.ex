@@ -61,9 +61,7 @@ defmodule MQTT.Packet.Connect do
     variable_header =
       protocol_name <> protocol_version <> connect_flags <> keep_alive <> properties
 
-    client_id = PacketEncoder.encode_utf8_string(packet.payload.client_id)
-
-    payload = client_id
+    payload = __MODULE__.Payload.encode!(packet.payload)
 
     remaining_length = byte_size(variable_header) + byte_size(payload)
 
