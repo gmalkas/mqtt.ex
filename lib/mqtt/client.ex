@@ -9,8 +9,25 @@ defmodule MQTT.Client do
 
   def connect(ip_address, client_id, options \\ []) do
     port = Keyword.get(options, :port, @default_port)
+    user_name = Keyword.get(options, :user_name)
+    password = Keyword.get(options, :password)
 
     packet = PacketBuilder.Connect.new(client_id)
+
+    packet =
+      if !is_nil(user_name) do
+        PacketBuilder.Connect.with_user_name(packet, user_name)
+      else
+        packet
+      end
+
+    packet =
+      if !is_nil(password) do
+        PacketBuilder.Connect.with_password(packet, password)
+      else
+        packet
+      end
+
     encoded_packet = Packet.Connect.encode!(packet)
 
     Logger.info("ip_address=#{ip_address}, port=#{port}, action=connect")

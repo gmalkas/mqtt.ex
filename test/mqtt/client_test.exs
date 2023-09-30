@@ -27,6 +27,19 @@ defmodule MQTT.ClientTest do
       assert :success = packet.connect_reason_code
       assert :connected = conn.state
     end
+
+    test "supports username/password authentication" do
+      user_name = "mqttex_basic"
+
+      {:ok, conn, tracer_port} = connect(user_name: user_name, password: "password")
+
+      assert :connecting = conn.state
+      assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connect, conn.client_id, user_name})
+      assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
+      assert {:ok, %Packet.Connack{} = packet, conn} = MQTT.Client.read_next_packet(conn)
+      assert :success = packet.connect_reason_code
+      assert :connected = conn.state
+    end
   end
 
   describe "subscribe/2" do
@@ -178,19 +191,26 @@ defmodule MQTT.ClientTest do
     end
   end
 
-  defp connect(client_id \\ generate_client_id()) do
-    tracer_port = MQTT.Test.Tracer.start!(client_id)
+  defp connect(options \\ []) do
+    client_id = Keyword.get_lazy(options, :client_id, &generate_client_id/0)
+    tracer? = Keyword.get(options, :tracer?, true)
+    connect_options = Keyword.take(options, [:user_name, :password])
 
-    {:ok, conn} = MQTT.Client.connect(@ip_address, client_id)
+    if tracer? do
+      tracer_port = MQTT.Test.Tracer.start!(client_id)
+      {:ok, conn} = MQTT.Client.connect(@ip_address, client_id, connect_options)
 
-    {:ok, conn, tracer_port}
+      {:ok, conn, tracer_port}
+    else
+      MQTT.Client.connect(@ip_address, client_id, connect_options)
+    end
   end
 
-  defp connect_and_wait_for_connack(client_id \\ generate_client_id()) do
-    {:ok, conn, tracer_port} = connect(client_id)
+  defp connect_and_wait_for_connack(options \\ []) do
+    {:ok, conn, tracer_port} = connect(options)
 
-    assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connect, client_id})
-    assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, client_id})
+    assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connect, conn.client_id})
+    assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
     assert {:ok, %Packet.Connack{}, conn} = MQTT.Client.read_next_packet(conn)
 
     {:ok, conn, tracer_port}

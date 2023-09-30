@@ -8,7 +8,29 @@ defmodule MQTT.Packet.Connect.Flags do
 end
 
 defmodule MQTT.Packet.Connect.Payload do
-  defstruct [:client_id]
+  alias MQTT.PacketEncoder
+
+  defstruct [:client_id, :user_name, :password]
+
+  def encode!(%__MODULE__{} = payload) do
+    client_id = PacketEncoder.encode_utf8_string(payload.client_id)
+
+    user_name =
+      if !is_nil(payload.user_name) do
+        PacketEncoder.encode_utf8_string(payload.user_name)
+      else
+        <<>>
+      end
+
+    password =
+      if !is_nil(payload.password) do
+        PacketEncoder.encode_binary_data(payload.password)
+      else
+        <<>>
+      end
+
+    client_id <> user_name <> password
+  end
 end
 
 defmodule MQTT.Packet.Connect do
