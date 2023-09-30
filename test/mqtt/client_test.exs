@@ -232,6 +232,38 @@ defmodule MQTT.ClientTest do
       assert application_message == packet.payload.data
       assert packet.flags.retain?
     end
+
+    test "supports retain as published" do
+      {:ok, conn, tracer_port} = connect_and_wait_for_connack()
+
+      topic = random_topic()
+      application_message = "Hello world!"
+
+      assert {:ok, conn} = MQTT.Client.subscribe(conn, [{topic, [retain_as_published?: true]}])
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:suback, conn.client_id}
+             )
+
+      assert {:ok, conn} = MQTT.Client.publish(conn, topic, application_message, retain?: true)
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:publish, conn.client_id, topic}
+             )
+
+      assert {:ok, %Packet.Suback{}, conn} = MQTT.Client.read_next_packet(conn)
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:send, :publish, conn.client_id, topic}
+             )
+
+      assert {:ok, %Packet.Publish{} = packet, _conn} = MQTT.Client.read_next_packet(conn)
+      assert application_message == packet.payload.data
+      assert packet.flags.retain?
+    end
   end
 
   defp connect(options \\ []) do
