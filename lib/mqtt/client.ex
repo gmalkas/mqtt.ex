@@ -135,6 +135,17 @@ defmodule MQTT.Client do
   end
 
   defp do_read_next_packet(socket, buffer) do
+    if byte_size(buffer) > 0 do
+      case PacketDecoder.decode(buffer) do
+        {:ok, packet, buffer} -> {:ok, packet, buffer}
+        {:error, :incomplete_packet} -> do_read_next_packet_from_socket(socket, buffer)
+      end
+    else
+      do_read_next_packet_from_socket(socket, buffer)
+    end
+  end
+
+  defp do_read_next_packet_from_socket(socket, buffer) do
     case read_from_socket(socket) do
       {:ok, data} ->
         Logger.debug(
@@ -145,7 +156,7 @@ defmodule MQTT.Client do
 
         case PacketDecoder.decode(buffer) do
           {:ok, packet, buffer} -> {:ok, packet, buffer}
-          {:error, :incomplete_packet} -> do_read_next_packet(socket, buffer)
+          {:error, :incomplete_packet} -> do_read_next_packet_from_socket(socket, buffer)
         end
 
       {:error, :timeout} ->
