@@ -56,6 +56,13 @@ defmodule MQTT.Test.Tracer do
     )
   end
 
+  def wait_for_trace(port, {send_or_recv, :publish, client_id, topic_name}) do
+    read_from_port_until_trace(
+      port,
+      ~r/MQTT #{format_trace_type(send_or_recv)}: CID: "#{Regex.escape(client_id)}" PUBLISH.*"#{Regex.escape(topic_name)}"/
+    )
+  end
+
   def wait_for_trace(port, {:puback, client_id}) do
     read_from_port_until_trace(port, ~s(MQTT SEND: CID: "#{client_id}" PUBACK))
   end
@@ -108,4 +115,7 @@ defmodule MQTT.Test.Tracer do
   defp match_trace?(data, %Regex{} = trace) do
     String.match?(data, trace)
   end
+
+  defp format_trace_type(:send), do: "SEND"
+  defp format_trace_type(:recv), do: "RECV"
 end

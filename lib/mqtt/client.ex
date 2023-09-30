@@ -61,6 +61,7 @@ defmodule MQTT.Client do
 
   def publish(%Conn{} = conn, topic, payload, options \\ []) do
     qos = Keyword.get(options, :qos, 0)
+    retain? = Keyword.get(options, :retain?, false)
 
     {packet_identifier, conn} =
       if qos > 0 do
@@ -69,12 +70,16 @@ defmodule MQTT.Client do
         {nil, conn}
       end
 
-    packet = PacketBuilder.Publish.new(packet_identifier, topic, payload, options)
-    encoded_packet = Packet.Publish.encode!(packet)
+    if retain? && !Conn.retain_available?(conn) do
+      {:error, :retain_not_available}
+    else
+      packet = PacketBuilder.Publish.new(packet_identifier, topic, payload, options)
+      encoded_packet = Packet.Publish.encode!(packet)
 
-    send_to_socket!(conn.socket, encoded_packet)
+      send_to_socket!(conn.socket, encoded_packet)
 
-    {:ok, conn}
+      {:ok, conn}
+    end
   end
 
   def read_next_packet(%Conn{} = conn) do

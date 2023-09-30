@@ -67,7 +67,7 @@ defmodule MQTT.Packet.Connack.Properties do
   defp validate_property(property_name, values) do
     case values do
       [] ->
-        {:ok, nil}
+        {:ok, default_property_value(property_name)}
 
       [value] ->
         validate_property_value(property_name, value)
@@ -78,4 +78,7 @@ defmodule MQTT.Packet.Connack.Properties do
   end
 
   defp validate_property_value(_, value), do: {:ok, value}
+
+  defp default_property_value(:retain_available), do: true
+  defp default_property_value(_), do: nil
 end
