@@ -19,7 +19,7 @@ defmodule MQTT.Test.Tracer do
   def wait_for_trace(port, {:connect, client_id, user_name}) do
     read_from_port_until_trace(
       port,
-      ~r/MQTT RECV: CID: "#{client_id}" CONNECT.*u: #{Regex.escape(user_name)}/
+      ~r/MQTT RECV: CID: "#{Regex.escape(client_id)}" CONNECT.*, u: #{Regex.escape(user_name)}/
     )
   end
 
