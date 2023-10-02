@@ -264,6 +264,31 @@ defmodule MQTT.ClientTest do
       assert application_message == packet.payload.data
       assert packet.flags.retain?
     end
+
+    test "supports No Local" do
+      {:ok, conn, tracer_port} = connect_and_wait_for_connack()
+
+      topic = random_topic()
+      application_message = "Hello world!"
+
+      assert {:ok, conn} = MQTT.Client.subscribe(conn, [{topic, [no_local?: true]}])
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:suback, conn.client_id}
+             )
+
+      assert {:ok, %Packet.Suback{}, conn} = MQTT.Client.read_next_packet(conn)
+
+      assert {:ok, conn} = MQTT.Client.publish(conn, topic, application_message)
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:publish, conn.client_id, topic}
+             )
+
+      assert {:error, :timeout} = MQTT.Client.read_next_packet(conn)
+    end
   end
 
   test "supports Keep Alive" do
