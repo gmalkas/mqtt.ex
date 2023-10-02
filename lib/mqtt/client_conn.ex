@@ -4,20 +4,23 @@ defmodule MQTT.ClientConn do
   @max_packet_identifier 0xFFFF
 
   defstruct [
-    :ip_address,
-    :port,
     :client_id,
     :connack_properties,
+    :keep_alive,
+    :last_packet_sent_at,
+    :ip_address,
+    :packet_identifiers,
+    :port,
     :socket,
     :state,
-    :read_buffer,
-    :packet_identifiers
+    :read_buffer
   ]
 
-  def connecting(ip_address, port, client_id, socket) when is_port(socket) do
+  def connecting(ip_address, port, socket, %Packet.Connect{} = packet) when is_port(socket) do
     %__MODULE__{
-      client_id: client_id,
+      client_id: packet.payload.client_id,
       ip_address: ip_address,
+      keep_alive: packet.keep_alive,
       packet_identifiers: MapSet.new(),
       port: port,
       read_buffer: "",
@@ -45,8 +48,19 @@ defmodule MQTT.ClientConn do
     end
   end
 
+  def packet_sent(%__MODULE__{} = conn) do
+    %__MODULE__{conn | last_packet_sent_at: monotonic_time()}
+  end
+
   def retain_available?(%__MODULE__{} = conn) do
     conn.connack_properties.retain_available
+  end
+
+  def should_ping?(%__MODULE__{keep_alive: 0}), do: false
+
+  def should_ping?(%__MODULE__{} = conn) do
+    is_nil(conn.last_packet_sent_at) ||
+      monotonic_time() - conn.last_packet_sent_at > conn.keep_alive
   end
 
   defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Connack{} = packet) do
@@ -109,4 +123,6 @@ defmodule MQTT.ClientConn do
       {:error, Error.packet_identifier_not_found(packet.packet_identifier)}
     end
   end
+
+  defp monotonic_time, do: :erlang.monotonic_time(:millisecond)
 end

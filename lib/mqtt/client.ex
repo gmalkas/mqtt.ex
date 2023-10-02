@@ -12,7 +12,11 @@ defmodule MQTT.Client do
     user_name = Keyword.get(options, :user_name)
     password = Keyword.get(options, :password)
 
-    packet = PacketBuilder.Connect.new(client_id)
+    packet_options =
+      Keyword.take(options, [:keep_alive])
+      |> Keyword.put(:client_id, client_id)
+
+    packet = PacketBuilder.Connect.new(packet_options)
 
     packet =
       if !is_nil(user_name) do
@@ -34,9 +38,9 @@ defmodule MQTT.Client do
 
     case tcp_connect(ip_address, port) do
       {:ok, socket} ->
-        send_to_socket!(socket, encoded_packet)
+        conn = send_packet!(Conn.connecting(ip_address, port, socket, packet), encoded_packet)
 
-        {:ok, Conn.connecting(ip_address, port, client_id, socket)}
+        {:ok, conn}
     end
   end
 
@@ -44,7 +48,7 @@ defmodule MQTT.Client do
     packet = PacketBuilder.Disconnect.new(:normal_disconnection)
     encoded_packet = Packet.Disconnect.encode!(packet)
 
-    send_to_socket!(conn.socket, encoded_packet)
+    conn = send_packet!(conn, encoded_packet)
     close_socket!(conn.socket)
 
     Conn.disconnect(conn)
@@ -54,7 +58,7 @@ defmodule MQTT.Client do
     packet = PacketBuilder.Pingreq.new()
     encoded_packet = Packet.Pingreq.encode!(packet)
 
-    send_to_socket!(conn.socket, encoded_packet)
+    conn = send_packet!(conn, encoded_packet)
 
     {:ok, conn}
   end
@@ -76,7 +80,7 @@ defmodule MQTT.Client do
       packet = PacketBuilder.Publish.new(packet_identifier, topic, payload, options)
       encoded_packet = Packet.Publish.encode!(packet)
 
-      send_to_socket!(conn.socket, encoded_packet)
+      conn = send_packet!(conn, encoded_packet)
 
       {:ok, conn}
     end
@@ -95,9 +99,17 @@ defmodule MQTT.Client do
     packet = PacketBuilder.Subscribe.new(packet_identifier, topic_filters)
     encoded_packet = Packet.Subscribe.encode!(packet)
 
-    send_to_socket!(conn.socket, encoded_packet)
+    conn = send_packet!(conn, encoded_packet)
 
     {:ok, conn}
+  end
+
+  def tick(%Conn{} = conn) do
+    if Conn.should_ping?(conn) do
+      ping(conn)
+    else
+      {:ok, conn}
+    end
   end
 
   def unsubscribe(%Conn{} = conn, topic_filters) when is_list(topic_filters) do
@@ -106,7 +118,7 @@ defmodule MQTT.Client do
     packet = PacketBuilder.Unsubscribe.new(packet_identifier, topic_filters)
     encoded_packet = Packet.Unsubscribe.encode!(packet)
 
-    send_to_socket!(conn.socket, encoded_packet)
+    conn = send_packet!(conn, encoded_packet)
 
     {:ok, conn}
   end
@@ -129,6 +141,12 @@ defmodule MQTT.Client do
 
   defp read_from_socket(socket) do
     :gen_tcp.recv(socket, 0, @default_read_timeout_ms)
+  end
+
+  defp send_packet!(conn, packet) do
+    send_to_socket!(conn.socket, packet)
+
+    Conn.packet_sent(conn)
   end
 
   defp send_to_socket!(socket, packet) do

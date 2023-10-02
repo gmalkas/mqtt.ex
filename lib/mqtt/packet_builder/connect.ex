@@ -4,18 +4,14 @@ defmodule MQTT.PacketBuilder.Connect do
   @default_protocol_name "MQTT"
   @default_protocol_version 5
 
-  def new(client_id) do
-    client_id =
-      if is_nil(client_id) do
-        ""
-      else
-        client_id
-      end
+  def new(options \\ []) do
+    client_id = Keyword.get(options, :client_id) || ""
+    keep_alive = Keyword.get(options, :keep_alive, 0)
 
     %Connect{
       protocol_name: @default_protocol_name,
       protocol_version: @default_protocol_version,
-      keep_alive: 0,
+      keep_alive: keep_alive,
       properties: %{},
       flags: %Connect.Flags{},
       payload: %Connect.Payload{client_id: client_id}

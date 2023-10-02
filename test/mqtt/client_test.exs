@@ -233,7 +233,7 @@ defmodule MQTT.ClientTest do
       assert packet.flags.retain?
     end
 
-    test "supports retain as published" do
+    test "supports Retain As Published" do
       {:ok, conn, tracer_port} = connect_and_wait_for_connack()
 
       topic = random_topic()
@@ -246,14 +246,14 @@ defmodule MQTT.ClientTest do
                {:suback, conn.client_id}
              )
 
+      assert {:ok, %Packet.Suback{}, conn} = MQTT.Client.read_next_packet(conn)
+
       assert {:ok, conn} = MQTT.Client.publish(conn, topic, application_message, retain?: true)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
                {:publish, conn.client_id, topic}
              )
-
-      assert {:ok, %Packet.Suback{}, conn} = MQTT.Client.read_next_packet(conn)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -266,10 +266,28 @@ defmodule MQTT.ClientTest do
     end
   end
 
+  test "supports Keep Alive" do
+    {:ok, conn, tracer_port} = connect_and_wait_for_connack(keep_alive: 1)
+
+    :timer.sleep(1000)
+
+    {:ok, conn} = MQTT.Client.tick(conn)
+
+    assert MQTT.Test.Tracer.wait_for_trace(
+             tracer_port,
+             {:pingreq, conn.client_id}
+           )
+
+    assert MQTT.Test.Tracer.wait_for_trace(
+             tracer_port,
+             {:pingresp, conn.client_id}
+           )
+  end
+
   defp connect(options \\ []) do
     client_id = Keyword.get_lazy(options, :client_id, &generate_client_id/0)
     tracer? = Keyword.get(options, :tracer?, true)
-    connect_options = Keyword.take(options, [:user_name, :password])
+    connect_options = Keyword.take(options, [:keep_alive, :user_name, :password])
 
     if tracer? do
       tracer_port = MQTT.Test.Tracer.start!(client_id)
