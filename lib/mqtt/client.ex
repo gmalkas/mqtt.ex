@@ -11,6 +11,7 @@ defmodule MQTT.Client do
     port = Keyword.get(options, :port, @default_port)
     user_name = Keyword.get(options, :user_name)
     password = Keyword.get(options, :password)
+    will_message = Keyword.get(options, :will_message)
 
     packet_options =
       Keyword.take(options, [:keep_alive])
@@ -32,6 +33,18 @@ defmodule MQTT.Client do
         packet
       end
 
+    packet =
+      case will_message do
+        nil ->
+          packet
+
+        {topic, payload} ->
+          PacketBuilder.Connect.with_will_message(packet, topic, payload)
+
+        {topic, payload, options} ->
+          PacketBuilder.Connect.with_will_message(packet, topic, payload, options)
+      end
+
     encoded_packet = Packet.Connect.encode!(packet)
 
     Logger.info("ip_address=#{ip_address}, port=#{port}, action=connect")
@@ -44,8 +57,8 @@ defmodule MQTT.Client do
     end
   end
 
-  def disconnect(%Conn{} = conn) do
-    packet = PacketBuilder.Disconnect.new(:normal_disconnection)
+  def disconnect(%Conn{} = conn, reason_code \\ :normal_disconnection) do
+    packet = PacketBuilder.Disconnect.new(reason_code)
     encoded_packet = Packet.Disconnect.encode!(packet)
 
     conn = send_packet!(conn, encoded_packet)

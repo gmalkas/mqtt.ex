@@ -51,6 +51,40 @@ defmodule MQTT.ClientTest do
       assert :success = packet.connect_reason_code
       assert :connected = conn.state
     end
+
+    test "supports setting a will message" do
+      will_topic = "will_topic"
+      will_payload = "will_payload"
+
+      # The "watcher" connection which we use to test that the will message
+      # was correctly specified by the client, cannot itself be traced as only
+      # one VerneMQ tracer process can exist at a time.
+      {:ok, watcher_conn} = connect(tracer?: false)
+
+      # This read could lead to the test being flaky as we depend on the server
+      # replying before the read timeout.
+      assert {:ok, %Packet.Connack{}, watcher_conn} = MQTT.Client.read_next_packet(watcher_conn)
+
+      assert {:ok, watcher_conn} = MQTT.Client.subscribe(watcher_conn, [will_topic])
+      assert {:ok, %Packet.Suback{}, watcher_conn} = MQTT.Client.read_next_packet(watcher_conn)
+
+      {:ok, conn, tracer_port} = connect(will_message: {will_topic, will_payload})
+
+      assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
+
+      assert {:ok, _conn} = MQTT.Client.disconnect(conn, :disconnect_with_will_message)
+
+      assert MQTT.Test.Tracer.wait_for_trace(
+               tracer_port,
+               {:disconnect, conn.client_id}
+             )
+
+      assert {:ok, %Packet.Publish{} = packet, _watcher_conn} =
+               MQTT.Client.read_next_packet(watcher_conn)
+
+      assert will_topic == packet.topic_name
+      assert will_payload == packet.payload.data
+    end
   end
 
   describe "subscribe/2" do
@@ -312,7 +346,7 @@ defmodule MQTT.ClientTest do
   defp connect(options \\ []) do
     client_id = Keyword.get_lazy(options, :client_id, &generate_client_id/0)
     tracer? = Keyword.get(options, :tracer?, true)
-    connect_options = Keyword.take(options, [:keep_alive, :user_name, :password])
+    connect_options = Keyword.take(options, [:keep_alive, :user_name, :password, :will_message])
 
     if tracer? do
       tracer_port = MQTT.Test.Tracer.start!(client_id)

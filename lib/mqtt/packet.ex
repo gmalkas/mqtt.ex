@@ -26,17 +26,28 @@ defmodule MQTT.Packet do
     3 => {:content_type, :utf8_string},
     8 => {:response_topic, :binary},
     9 => {:correlation_data, :variable_byte_integer},
+    11 => {:subscription_identifier, :variable_byte_integer},
     17 => {:session_expiry_interval, :four_byte_integer},
     18 => {:assigned_client_identifier, :utf8_string},
+    19 => {:server_keep_alive, :two_byte_integer},
     21 => {:authentication_method, :utf8_string},
     22 => {:authentication_data, :binary},
     23 => {:request_problem_information, :byte},
     24 => {:will_delay_interval, :four_byte_integer},
     25 => {:request_response_information, :byte},
+    26 => {:response_information, :utf8_string},
+    28 => {:server_reference, :utf8_string},
+    31 => {:reason_string, :utf8_string},
     33 => {:receive_maximum, :two_byte_integer},
     34 => {:topic_alias_maximum, :two_byte_integer},
+    35 => {:topic_alias, :two_byte_integer},
+    36 => {:maximum_qos, :byte},
+    37 => {:retain_available, :byte},
     38 => {:user_property, :utf8_string_pair},
-    39 => {:maximum_packet_size, :four_byte_integer}
+    39 => {:maximum_packet_size, :four_byte_integer},
+    40 => {:wildcard_subscription_available, :byte},
+    41 => {:subscription_identifiers_available, :byte},
+    42 => {:shared_subscription_available, :byte}
   }
 
   @property_by_name Enum.map(@property_by_identifier, fn {id, {name, type}} ->
@@ -50,6 +61,7 @@ defmodule MQTT.Packet do
     {:connack, 134} => :bad_user_name_or_password,
     {:puback, 0} => :success,
     {:disconnect, 0} => :normal_disconnection,
+    {:disconnect, 4} => :disconnect_with_will_message,
     {:suback, 0} => :granted_qos_0,
     {:unsuback, 0} => :success
   }

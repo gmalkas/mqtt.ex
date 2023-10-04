@@ -3,6 +3,9 @@ defmodule MQTT.PacketBuilder.Connect do
 
   @default_protocol_name "MQTT"
   @default_protocol_version 5
+  @default_will_qos 0
+  @default_will_retain false
+  @default_will_properties %Connect.Payload.WillProperties{}
 
   def new(options \\ []) do
     client_id = Keyword.get(options, :client_id) || ""
@@ -31,6 +34,29 @@ defmodule MQTT.PacketBuilder.Connect do
       packet
       | flags: %Connect.Flags{packet.flags | password?: true},
         payload: %Connect.Payload{packet.payload | password: password}
+    }
+  end
+
+  def with_will_message(%Connect{} = packet, will_topic, will_payload, will_options \\ [])
+      when is_binary(will_topic) and is_binary(will_payload) do
+    will_qos = Keyword.get(will_options, :qos, @default_will_qos)
+    will_retain? = Keyword.get(will_options, :retain?, @default_will_retain)
+    will_properties = Keyword.get(will_options, :properties, @default_will_properties)
+
+    %Connect{
+      packet
+      | flags: %Connect.Flags{
+          packet.flags
+          | will?: true,
+            will_qos: will_qos,
+            will_retain?: will_retain?
+        },
+        payload: %Connect.Payload{
+          packet.payload
+          | will_properties: will_properties,
+            will_topic: will_topic,
+            will_payload: will_payload
+        }
     }
   end
 end
