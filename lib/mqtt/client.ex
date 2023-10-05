@@ -51,12 +51,8 @@ defmodule MQTT.Client do
 
     Logger.info("host=#{host}, port=#{port}, action=connect")
 
-    case transport.connect(host, port, transport_opts) do
-      {:ok, socket} ->
-        conn =
-          send_packet!(Conn.connecting(transport, host, port, socket, packet), encoded_packet)
-
-        {:ok, conn}
+    with {:ok, socket} <- transport.connect(host, port, transport_opts) do
+      send_packet(Conn.connecting(transport, host, port, socket, packet), encoded_packet)
     end
   end
 
@@ -64,19 +60,17 @@ defmodule MQTT.Client do
     packet = PacketBuilder.Disconnect.new(reason_code)
     encoded_packet = Packet.Disconnect.encode!(packet)
 
-    conn = send_packet!(conn, encoded_packet)
-    :ok = conn.transport.close(conn.socket)
-
-    Conn.disconnect(conn)
+    with {:ok, conn} <- send_packet(conn, encoded_packet),
+         :ok <- conn.transport.close(conn.socket) do
+      Conn.disconnect(conn)
+    end
   end
 
   def ping(%Conn{} = conn) do
     packet = PacketBuilder.Pingreq.new()
     encoded_packet = Packet.Pingreq.encode!(packet)
 
-    conn = send_packet!(conn, encoded_packet)
-
-    {:ok, conn}
+    send_packet(conn, encoded_packet)
   end
 
   def publish(%Conn{} = conn, topic, payload, options \\ []) do
@@ -96,9 +90,7 @@ defmodule MQTT.Client do
       packet = PacketBuilder.Publish.new(packet_identifier, topic, payload, options)
       encoded_packet = Packet.Publish.encode!(packet)
 
-      conn = send_packet!(conn, encoded_packet)
-
-      {:ok, conn}
+      send_packet(conn, encoded_packet)
     end
   end
 
@@ -115,9 +107,7 @@ defmodule MQTT.Client do
     packet = PacketBuilder.Subscribe.new(packet_identifier, topic_filters)
     encoded_packet = Packet.Subscribe.encode!(packet)
 
-    conn = send_packet!(conn, encoded_packet)
-
-    {:ok, conn}
+    send_packet(conn, encoded_packet)
   end
 
   def tick(%Conn{} = conn) do
@@ -134,17 +124,15 @@ defmodule MQTT.Client do
     packet = PacketBuilder.Unsubscribe.new(packet_identifier, topic_filters)
     encoded_packet = Packet.Unsubscribe.encode!(packet)
 
-    conn = send_packet!(conn, encoded_packet)
-
-    {:ok, conn}
+    send_packet(conn, encoded_packet)
   end
 
   # HELPERS
 
-  defp send_packet!(conn, packet) do
-    :ok = conn.transport.send(conn.socket, packet)
-
-    Conn.packet_sent(conn)
+  defp send_packet(conn, packet) do
+    with :ok <- conn.transport.send(conn.socket, packet) do
+      {:ok, Conn.packet_sent(conn)}
+    end
   end
 
   defp do_read_next_packet(conn, buffer) do
@@ -159,21 +147,17 @@ defmodule MQTT.Client do
   end
 
   defp do_read_next_packet_from_socket(conn, buffer) do
-    case conn.transport.recv(conn.socket, 0, @default_read_timeout_ms) do
-      {:ok, data} ->
-        Logger.debug(
-          "socket=#{inspect(conn.socket)}, action=read, size=#{byte_size(data)}, data=#{Base.encode16(data)}"
-        )
+    with {:ok, data} <- conn.transport.recv(conn.socket, 0, @default_read_timeout_ms) do
+      Logger.debug(
+        "socket=#{inspect(conn.socket)}, action=read, size=#{byte_size(data)}, data=#{Base.encode16(data)}"
+      )
 
-        buffer = buffer <> data
+      buffer = buffer <> data
 
-        case PacketDecoder.decode(buffer) do
-          {:ok, packet, buffer} -> {:ok, packet, buffer}
-          {:error, :incomplete} -> do_read_next_packet_from_socket(conn, buffer)
-        end
-
-      {:error, :timeout} ->
-        {:error, :timeout}
+      case PacketDecoder.decode(buffer) do
+        {:ok, packet, buffer} -> {:ok, packet, buffer}
+        {:error, :incomplete} -> do_read_next_packet_from_socket(conn, buffer)
+      end
     end
   end
 

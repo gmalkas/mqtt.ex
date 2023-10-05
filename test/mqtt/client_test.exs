@@ -1,7 +1,7 @@
 defmodule MQTT.ClientTest do
   use ExUnit.Case, async: false
 
-  alias MQTT.Packet
+  alias MQTT.{Packet, TransportError}
 
   @client_id_byte_size 12
   @topic_byte_size 12
@@ -337,7 +337,7 @@ defmodule MQTT.ClientTest do
                {:publish, conn.client_id, topic}
              )
 
-      assert {:error, :timeout} = MQTT.Client.read_next_packet(conn)
+      assert {:error, %TransportError{reason: :timeout}} = MQTT.Client.read_next_packet(conn)
     end
   end
 

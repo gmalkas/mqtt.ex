@@ -1,6 +1,8 @@
 defmodule MQTT.Transport.TCP do
   require Logger
 
+  alias MQTT.TransportError
+
   @transport_opts [
     :binary,
     active: false,
@@ -15,11 +17,11 @@ defmodule MQTT.Transport.TCP do
   def connect(host, port, opts) when is_binary(host) do
     host = String.to_charlist(host)
 
-    :gen_tcp.connect(host, port, Keyword.merge(opts, @transport_opts))
+    wrap_error(:gen_tcp.connect(host, port, Keyword.merge(opts, @transport_opts)))
   end
 
   def recv(socket, byte_count, timeout) do
-    :gen_tcp.recv(socket, byte_count, timeout)
+    wrap_error(:gen_tcp.recv(socket, byte_count, timeout))
   end
 
   def send(socket, payload) do
@@ -27,6 +29,9 @@ defmodule MQTT.Transport.TCP do
       "socket=#{inspect(socket)}, action=send, size=#{byte_size(payload)}, data=#{Base.encode16(payload)}"
     )
 
-    :ok = :gen_tcp.send(socket, payload)
+    wrap_error(:gen_tcp.send(socket, payload))
   end
+
+  defp wrap_error({:error, reason}), do: {:error, %TransportError{reason: reason}}
+  defp wrap_error(other), do: other
 end
