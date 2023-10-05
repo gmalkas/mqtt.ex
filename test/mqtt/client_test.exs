@@ -29,6 +29,22 @@ defmodule MQTT.ClientTest do
       assert :connected = conn.state
     end
 
+    test "connects to a MQTT server over TLS" do
+      {:ok, conn, tracer_port} =
+        connect(
+          address: "localhost",
+          transport: MQTT.Transport.TLS,
+          transport_opts: [cacerts: [], verify_fun: {&verify_cert/3, nil}]
+        )
+
+      assert :connecting = conn.state
+      assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connect, conn.client_id})
+      assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
+      assert {:ok, %Packet.Connack{} = packet, conn} = MQTT.Client.read_next_packet(conn)
+      assert :success = packet.connect_reason_code
+      assert :connected = conn.state
+    end
+
     test "supports receiving client ID from server" do
       {:ok, conn} = connect(client_id: nil, tracer?: false)
 
@@ -346,15 +362,26 @@ defmodule MQTT.ClientTest do
   defp connect(options \\ []) do
     client_id = Keyword.get_lazy(options, :client_id, &generate_client_id/0)
     tracer? = Keyword.get(options, :tracer?, true)
-    connect_options = Keyword.take(options, [:keep_alive, :user_name, :password, :will_message])
+    address = Keyword.get(options, :address, @ip_address)
+
+    connect_options =
+      Keyword.take(options, [
+        :keep_alive,
+        :user_name,
+        :password,
+        :will_message,
+        :transport,
+        :transport_opts
+      ])
 
     if tracer? do
       tracer_port = MQTT.Test.Tracer.start!(client_id)
-      {:ok, conn} = MQTT.Client.connect(@ip_address, client_id, connect_options)
+      {:ok, conn} = MQTT.Client.connect(address, client_id, connect_options)
 
       {:ok, conn, tracer_port}
     else
-      MQTT.Client.connect(@ip_address, client_id, connect_options)
+      {:ok, conn} = MQTT.Client.connect(address, client_id, connect_options)
+      {:ok, conn}
     end
   end
 
@@ -378,5 +405,13 @@ defmodule MQTT.ClientTest do
     @topic_byte_size
     |> :crypto.strong_rand_bytes()
     |> Base.encode16()
+  end
+
+  defp verify_cert(_cert, {:bad_cert, :selfsigned_peer}, state) do
+    {:valid, state}
+  end
+
+  defp verify_cert(_, {:extension, _}, state) do
+    {:unknown, state}
   end
 end

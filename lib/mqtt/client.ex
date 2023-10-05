@@ -2,13 +2,15 @@ defmodule MQTT.Client do
   require Logger
 
   alias MQTT.ClientConn, as: Conn
-  alias MQTT.{Packet, PacketBuilder, PacketDecoder}
+  alias MQTT.{Packet, PacketBuilder, PacketDecoder, Transport}
 
-  @default_port 1883
   @default_read_timeout_ms 500
 
-  def connect(ip_address, client_id, options \\ []) do
-    port = Keyword.get(options, :port, @default_port)
+  def connect(host, client_id, options \\ []) do
+    transport = Keyword.get(options, :transport, Transport.TCP)
+    transport_opts = Keyword.get(options, :transport_opts, [])
+    port = Keyword.get(options, :port, default_port(transport))
+
     user_name = Keyword.get(options, :user_name)
     password = Keyword.get(options, :password)
     will_message = Keyword.get(options, :will_message)
@@ -47,11 +49,12 @@ defmodule MQTT.Client do
 
     encoded_packet = Packet.Connect.encode!(packet)
 
-    Logger.info("ip_address=#{ip_address}, port=#{port}, action=connect")
+    Logger.info("host=#{host}, port=#{port}, action=connect")
 
-    case tcp_connect(ip_address, port) do
+    case transport.connect(host, port, transport_opts) do
       {:ok, socket} ->
-        conn = send_packet!(Conn.connecting(ip_address, port, socket, packet), encoded_packet)
+        conn =
+          send_packet!(Conn.connecting(transport, host, port, socket, packet), encoded_packet)
 
         {:ok, conn}
     end
@@ -62,7 +65,7 @@ defmodule MQTT.Client do
     encoded_packet = Packet.Disconnect.encode!(packet)
 
     conn = send_packet!(conn, encoded_packet)
-    close_socket!(conn.socket)
+    :ok = conn.transport.close(conn.socket)
 
     Conn.disconnect(conn)
   end
@@ -100,7 +103,7 @@ defmodule MQTT.Client do
   end
 
   def read_next_packet(%Conn{} = conn) do
-    with {:ok, packet, buffer} <- do_read_next_packet(conn.socket, conn.read_buffer),
+    with {:ok, packet, buffer} <- do_read_next_packet(conn, conn.read_buffer),
          {:ok, conn} <- Conn.handle_packet_from_server(conn, packet, buffer) do
       {:ok, packet, conn}
     end
@@ -138,61 +141,35 @@ defmodule MQTT.Client do
 
   # HELPERS
 
-  defp tcp_connect(ip_address, port) do
-    {:ok, ip_address} =
-      ip_address
-      |> String.to_charlist()
-      |> :inet.parse_address()
-
-    :gen_tcp.connect(ip_address, port, [
-      :binary,
-      active: false,
-      keepalive: true,
-      nodelay: true
-    ])
-  end
-
-  defp read_from_socket(socket) do
-    :gen_tcp.recv(socket, 0, @default_read_timeout_ms)
-  end
-
   defp send_packet!(conn, packet) do
-    send_to_socket!(conn.socket, packet)
+    :ok = conn.transport.send(conn.socket, packet)
 
     Conn.packet_sent(conn)
   end
 
-  defp send_to_socket!(socket, packet) do
-    Logger.debug(
-      "socket=#{inspect(socket)}, action=send, size=#{byte_size(packet)}, data=#{Base.encode16(packet)}"
-    )
-
-    :ok = :gen_tcp.send(socket, packet)
-  end
-
-  defp do_read_next_packet(socket, buffer) do
+  defp do_read_next_packet(conn, buffer) do
     if byte_size(buffer) > 0 do
       case PacketDecoder.decode(buffer) do
         {:ok, packet, buffer} -> {:ok, packet, buffer}
-        {:error, :incomplete_packet} -> do_read_next_packet_from_socket(socket, buffer)
+        {:error, :incomplete} -> do_read_next_packet_from_socket(conn, buffer)
       end
     else
-      do_read_next_packet_from_socket(socket, buffer)
+      do_read_next_packet_from_socket(conn, buffer)
     end
   end
 
-  defp do_read_next_packet_from_socket(socket, buffer) do
-    case read_from_socket(socket) do
+  defp do_read_next_packet_from_socket(conn, buffer) do
+    case conn.transport.recv(conn.socket, 0, @default_read_timeout_ms) do
       {:ok, data} ->
         Logger.debug(
-          "socket=#{inspect(socket)}, action=read, size=#{byte_size(data)}, data=#{Base.encode16(data)}"
+          "socket=#{inspect(conn.socket)}, action=read, size=#{byte_size(data)}, data=#{Base.encode16(data)}"
         )
 
         buffer = buffer <> data
 
         case PacketDecoder.decode(buffer) do
           {:ok, packet, buffer} -> {:ok, packet, buffer}
-          {:error, :incomplete_packet} -> do_read_next_packet_from_socket(socket, buffer)
+          {:error, :incomplete} -> do_read_next_packet_from_socket(conn, buffer)
         end
 
       {:error, :timeout} ->
@@ -200,5 +177,6 @@ defmodule MQTT.Client do
     end
   end
 
-  defp close_socket!(socket), do: :ok = :gen_tcp.close(socket)
+  defp default_port(Transport.TCP), do: 1883
+  defp default_port(Transport.TLS), do: 8883
 end

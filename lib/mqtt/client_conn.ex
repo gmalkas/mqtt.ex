@@ -8,24 +8,26 @@ defmodule MQTT.ClientConn do
     :connack_properties,
     :keep_alive,
     :last_packet_sent_at,
-    :ip_address,
+    :host,
     :packet_identifiers,
     :port,
+    :read_buffer,
     :socket,
     :state,
-    :read_buffer
+    :transport
   ]
 
-  def connecting(ip_address, port, socket, %Packet.Connect{} = packet) when is_port(socket) do
+  def connecting(transport, host, port, socket, %Packet.Connect{} = packet) do
     %__MODULE__{
       client_id: packet.payload.client_id,
-      ip_address: ip_address,
+      host: host,
       keep_alive: packet.keep_alive,
       packet_identifiers: MapSet.new(),
       port: port,
       read_buffer: "",
       socket: socket,
-      state: :connecting
+      state: :connecting,
+      transport: transport
     }
   end
 
