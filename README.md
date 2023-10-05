@@ -20,22 +20,25 @@ Here are the objectives, in order of importance:
 ## Roadmap
 
 - Client
-    - [ ] Retain
-    - [ ] Will message
-    - [ ] Shared Subscriptions
+    - [x] Retain
+    - [x] Will message
+    - [x] Shared Subscriptions
+    - [x] Username/password authentication
+    - [x] Transport over TLS
+    - [ ] Process-based API
     - [ ] Server redirection
     - [ ] Session
-    - [ ] QoS 1/2
+    - [ ] QoS 1
+    - [ ] QoS 2
     - [ ] Keep-alive
     - [ ] Receive Maximum
-    - [x] Username/password authentication
     - [ ] Send Disconnect with proper reason code on error
     - [ ] Packet encoding validation
     - [ ] UTF8 validation
     - [ ] Support for AUTH packet
     - [ ] Support all reason codes
     - [ ] Support all properties
-    - [ ] Transport over TLS
+    - [ ] IPv6
     - [ ] Authentication with TLS client certificate
     - [ ] Transport over WebSocket
     - [ ] Add support for MQTT v3.1.1
