@@ -26,14 +26,14 @@ Here are the objectives, in order of importance:
     - [x] Username/password authentication
     - [x] Transport over TLS
     - [x] QoS 1
-    - [ ] Topic Alias
+    - [x] Topic Alias
+    - [x] Topic Alias Maximum
     - [ ] QoS 2
     - [ ] Process-based API
     - [ ] Server redirection
     - [ ] Keep-alive
     - [ ] Receive Maximum
     - [ ] Maximum Packet Size
-    - [ ] Topic Alias Maximum
     - [ ] Send Disconnect with proper reason code on error
     - [ ] Packet encoding validation
     - [ ] UTF8 validation

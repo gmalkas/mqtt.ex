@@ -3,6 +3,7 @@ defmodule MQTT.ClientTest do
 
   alias MQTT.{Packet, TransportError}
   alias MQTT.ClientSession, as: Session
+  alias MQTT.ClientConn, as: Conn
 
   @client_id_byte_size 12
   @topic_byte_size 12
@@ -391,6 +392,41 @@ defmodule MQTT.ClientTest do
 
       assert {:error, %TransportError{reason: :timeout}} = MQTT.Client.read_next_packet(conn)
     end
+  end
+
+  test "supports topic aliases" do
+    {:ok, conn, tracer_port} = connect_and_wait_for_connack()
+
+    # VerneMQ does not specifyc the `topic_alias_maximum` property despite
+    # supporting topic aliases, so to test this we hardcode it to something > 0.
+    conn = Conn.set_topic_alias_maximum(conn, 5)
+
+    topic = "/my/topic"
+    application_message = "Hello world!"
+
+    assert {:ok, conn} = MQTT.Client.publish(conn, topic, application_message)
+
+    assert MQTT.Test.Tracer.wait_for_trace(
+             tracer_port,
+             {:publish, conn.client_id, topic}
+           )
+
+    assert {:ok, conn} = MQTT.Client.publish(conn, topic, application_message, qos: 1)
+
+    assert {:ok, topic_alias} = Conn.fetch_topic_alias(conn, topic)
+
+    assert MQTT.Test.Tracer.wait_for_trace(
+             tracer_port,
+             {:publish, conn.client_id, "", topic_alias}
+           )
+
+    assert MQTT.Test.Tracer.wait_for_trace(
+             tracer_port,
+             {:puback, conn.client_id}
+           )
+
+    assert {:ok, %Packet.Puback{} = packet, _conn} = MQTT.Client.read_next_packet(conn)
+    assert :success = packet.reason_code
   end
 
   test "supports Keep Alive" do

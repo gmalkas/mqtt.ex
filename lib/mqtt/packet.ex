@@ -60,6 +60,7 @@ defmodule MQTT.Packet do
     {:connack, 0} => :success,
     {:connack, 134} => :bad_user_name_or_password,
     {:puback, 0} => :success,
+    {:puback, 131} => :implementation_specific_error,
     {:disconnect, 0} => :normal_disconnection,
     {:disconnect, 4} => :disconnect_with_will_message,
     {:suback, 0} => :granted_qos_0,

@@ -93,7 +93,10 @@ defmodule MQTT.Client do
     if retain? && !Conn.retain_available?(conn) do
       {:error, :retain_not_available}
     else
-      packet = PacketBuilder.Publish.new(packet_identifier, topic, payload, options)
+      {topic_with_alias, conn} = Conn.topic_alias(conn, topic)
+
+      packet =
+        PacketBuilder.Publish.new(packet_identifier, topic_with_alias, payload, options)
 
       send_packet(conn, packet)
     end

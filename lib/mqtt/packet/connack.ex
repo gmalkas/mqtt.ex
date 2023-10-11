@@ -84,5 +84,6 @@ defmodule MQTT.Packet.Connack.Properties do
   defp validate_property_value(_, value), do: {:ok, value}
 
   defp default_property_value(:retain_available), do: true
+  defp default_property_value(:topic_alias_maximum), do: 0
   defp default_property_value(_), do: nil
 end

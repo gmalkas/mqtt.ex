@@ -56,6 +56,13 @@ defmodule MQTT.Test.Tracer do
     )
   end
 
+  def wait_for_trace(port, {:publish, client_id, topic_name, topic_alias}) do
+    read_from_port_until_trace(
+      port,
+      ~r/MQTT RECV: CID: "#{Regex.escape(client_id)}" PUBLISH.*"#{Regex.escape(topic_name)}"\).*\n.*\n.*topic_alias => #{topic_alias}/
+    )
+  end
+
   def wait_for_trace(port, {send_or_recv, :publish, client_id, topic_name}) do
     read_from_port_until_trace(
       port,
