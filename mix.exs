@@ -22,9 +22,7 @@ defmodule MQTT.MixProject do
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
-    [
-      {:mix_test_watch, "~> 1.0", only: :dev, runtime: false}
-    ]
+    []
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
