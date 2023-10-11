@@ -14,4 +14,8 @@ defmodule MQTT.PacketBuilder.Publish do
       topic_name: topic_name
     }
   end
+
+  def with_dup(%Publish{} = packet, value) when is_boolean(value) do
+    %Publish{packet | flags: %Publish.Flags{packet.flags | dup?: value}}
+  end
 end

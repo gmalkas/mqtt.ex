@@ -25,13 +25,15 @@ Here are the objectives, in order of importance:
     - [x] Shared Subscriptions
     - [x] Username/password authentication
     - [x] Transport over TLS
+    - [x] QoS 1
+    - [ ] Topic Alias
+    - [ ] QoS 2
     - [ ] Process-based API
     - [ ] Server redirection
-    - [ ] Session
-    - [ ] QoS 1
-    - [ ] QoS 2
     - [ ] Keep-alive
     - [ ] Receive Maximum
+    - [ ] Maximum Packet Size
+    - [ ] Topic Alias Maximum
     - [ ] Send Disconnect with proper reason code on error
     - [ ] Packet encoding validation
     - [ ] UTF8 validation

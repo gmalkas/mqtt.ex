@@ -2,6 +2,7 @@ defmodule MQTT.ClientTest do
   use ExUnit.Case, async: false
 
   alias MQTT.{Packet, TransportError}
+  alias MQTT.ClientSession, as: Session
 
   @client_id_byte_size 12
   @topic_byte_size 12
@@ -25,7 +26,7 @@ defmodule MQTT.ClientTest do
       assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connect, conn.client_id})
       assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
       assert {:ok, %Packet.Connack{} = packet, conn} = MQTT.Client.read_next_packet(conn)
-      assert :success = packet.connect_reason_code
+      assert :success = packet.reason_code
       assert :connected = conn.state
     end
 
@@ -41,7 +42,7 @@ defmodule MQTT.ClientTest do
       assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connect, conn.client_id})
       assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
       assert {:ok, %Packet.Connack{} = packet, conn} = MQTT.Client.read_next_packet(conn)
-      assert :success = packet.connect_reason_code
+      assert :success = packet.reason_code
       assert :connected = conn.state
     end
 
@@ -49,7 +50,7 @@ defmodule MQTT.ClientTest do
       {:ok, conn} = connect(client_id: nil, tracer?: false)
 
       assert {:ok, %Packet.Connack{} = packet, conn} = MQTT.Client.read_next_packet(conn)
-      assert :success = packet.connect_reason_code
+      assert :success = packet.reason_code
       refute is_nil(packet.properties.assigned_client_identifier)
       assert packet.properties.assigned_client_identifier == conn.client_id
       assert :connected = conn.state
@@ -64,7 +65,7 @@ defmodule MQTT.ClientTest do
       assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connect, conn.client_id, user_name})
       assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
       assert {:ok, %Packet.Connack{} = packet, conn} = MQTT.Client.read_next_packet(conn)
-      assert :success = packet.connect_reason_code
+      assert :success = packet.reason_code
       assert :connected = conn.state
     end
 
@@ -125,7 +126,7 @@ defmodule MQTT.ClientTest do
 
       assert {:ok, %Packet.Suback{} = packet, conn} = MQTT.Client.read_next_packet(conn)
       assert [^expected_reason_code] = packet.payload.reason_codes
-      assert 0 = MapSet.size(conn.packet_identifiers)
+      refute Session.has_packet_identifier?(conn.session, packet.packet_identifier)
     end
   end
 
@@ -160,7 +161,58 @@ defmodule MQTT.ClientTest do
 
       assert {:ok, %Packet.Unsuback{} = packet, conn} = MQTT.Client.read_next_packet(conn)
       assert ^expected_reason_codes = packet.payload.reason_codes
-      assert 0 = MapSet.size(conn.packet_identifiers)
+      refute Session.has_packet_identifier?(conn.session, packet.packet_identifier)
+    end
+  end
+
+  describe "reconnect/1" do
+    test "re-sends unacknowledged PUBLISH packets with QoS > 0" do
+      {:ok, conn, tracer_port} = connect_and_wait_for_connack()
+
+      topic = "/my/topic"
+      payload = "Hello world!"
+
+      assert {:ok, conn} = MQTT.Client.publish(conn, topic, payload, qos: 1)
+
+      assert {:ok, conn} = MQTT.Client.disconnect!(conn)
+
+      assert {:ok, packet, conn} = MQTT.Client.reconnect(conn)
+
+      assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
+
+      # This test is dependent on timing as the server may or may have not
+      # sent the PUBACK packet before we disconnected. If it did, it will have
+      # no session when we reconnect, so we cannot expect the session to be
+      # present.
+      #
+      # To make the test reliable, we test different things depending on the
+      # state of the session on the server.
+      #
+      # If the session is present, we test that we republish the QoS 1 message.
+      # If it is not, we test that we destroy the session on our side.
+
+      if packet.flags.session_present? do
+        assert MQTT.Test.Tracer.wait_for_trace(
+                 tracer_port,
+                 {:publish, conn.client_id, topic}
+               )
+
+        assert MQTT.Test.Tracer.wait_for_trace(
+                 tracer_port,
+                 {:puback, conn.client_id}
+               )
+
+        assert {:ok, %Packet.Puback{} = packet, conn} = MQTT.Client.read_next_packet(conn)
+        assert :success = packet.reason_code
+        assert 0 = Session.unacknowledged_message_count(conn.session)
+      else
+        refute MQTT.Test.Tracer.wait_for_trace(
+                 tracer_port,
+                 {:publish, conn.client_id, topic}
+               )
+
+        assert 0 = Session.unacknowledged_message_count(conn.session)
+      end
     end
   end
 
@@ -185,7 +237,7 @@ defmodule MQTT.ClientTest do
 
       assert {:ok, %Packet.Puback{} = packet, conn} = MQTT.Client.read_next_packet(conn)
       assert :success = packet.reason_code
-      assert 0 = MapSet.size(conn.packet_identifiers)
+      refute Session.has_packet_identifier?(conn.session, packet.packet_identifier)
     end
   end
 

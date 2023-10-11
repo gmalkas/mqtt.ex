@@ -7,6 +7,13 @@ defmodule MQTT.PacketBuilder.Connect do
   @default_will_retain false
   @default_will_properties %Connect.Payload.WillProperties{}
 
+  def with_clean_start(%Connect{} = packet, value) when is_boolean(value) do
+    %Connect{
+      packet
+      | flags: %Connect.Flags{packet.flags | clean_start?: value}
+    }
+  end
+
   def new(options \\ []) do
     client_id = Keyword.get(options, :client_id) || ""
     keep_alive = Keyword.get(options, :keep_alive, 0)

@@ -70,6 +70,18 @@ defmodule MQTT.Packet do
                        end)
                        |> Map.new()
 
+  def encode!(%packet_module{} = packet)
+      when packet_module in [
+             __MODULE__.Connect,
+             __MODULE__.Publish,
+             __MODULE__.Subscribe,
+             __MODULE__.Unsubscribe,
+             __MODULE__.Disconnect,
+             __MODULE__.Pingreq
+           ] do
+    packet_module.encode!(packet)
+  end
+
   def property_by_name!(name), do: Map.fetch!(@property_by_name, name)
   def property_names, do: @property_names
 

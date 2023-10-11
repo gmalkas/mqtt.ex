@@ -2,7 +2,8 @@ defmodule MQTT.Client do
   require Logger
 
   alias MQTT.ClientConn, as: Conn
-  alias MQTT.{Packet, PacketBuilder, PacketDecoder, Transport}
+  alias MQTT.ClientSession, as: Session
+  alias MQTT.{Error, Packet, PacketBuilder, PacketDecoder, Transport}
 
   @default_read_timeout_ms 500
 
@@ -47,30 +48,35 @@ defmodule MQTT.Client do
           PacketBuilder.Connect.with_will_message(packet, topic, payload, options)
       end
 
-    encoded_packet = Packet.Connect.encode!(packet)
-
     Logger.info("host=#{host}, port=#{port}, action=connect")
 
     with {:ok, socket} <- transport.connect(host, port, transport_opts) do
-      send_packet(Conn.connecting(transport, host, port, socket, packet), encoded_packet)
+      send_packet(
+        Conn.connecting({transport, transport_opts}, host, port, socket, packet),
+        packet
+      )
     end
   end
 
   def disconnect(%Conn{} = conn, reason_code \\ :normal_disconnection) do
     packet = PacketBuilder.Disconnect.new(reason_code)
-    encoded_packet = Packet.Disconnect.encode!(packet)
 
-    with {:ok, conn} <- send_packet(conn, encoded_packet),
+    with {:ok, conn} <- send_packet(conn, packet),
          :ok <- conn.transport.close(conn.socket) do
+      Conn.disconnect(conn)
+    end
+  end
+
+  def disconnect!(%Conn{} = conn) do
+    with :ok <- conn.transport.close(conn.socket) do
       Conn.disconnect(conn)
     end
   end
 
   def ping(%Conn{} = conn) do
     packet = PacketBuilder.Pingreq.new()
-    encoded_packet = Packet.Pingreq.encode!(packet)
 
-    send_packet(conn, encoded_packet)
+    send_packet(conn, packet)
   end
 
   def publish(%Conn{} = conn, topic, payload, options \\ []) do
@@ -88,9 +94,8 @@ defmodule MQTT.Client do
       {:error, :retain_not_available}
     else
       packet = PacketBuilder.Publish.new(packet_identifier, topic, payload, options)
-      encoded_packet = Packet.Publish.encode!(packet)
 
-      send_packet(conn, encoded_packet)
+      send_packet(conn, packet)
     end
   end
 
@@ -101,13 +106,33 @@ defmodule MQTT.Client do
     end
   end
 
+  def reconnect(%Conn{state: :disconnected} = conn) do
+    connect_packet = PacketBuilder.Connect.with_clean_start(conn.connect_packet, false)
+
+    Logger.info("host=#{conn.host}, port=#{conn.port}, action=reconnect")
+
+    with {:ok, socket} <- conn.transport.connect(conn.host, conn.port, conn.transport_opts),
+         {:ok, conn} <- send_packet(Conn.reconnecting(conn, socket), connect_packet) do
+      case read_next_packet(conn) do
+        {:ok, %Packet.Connack{} = packet, conn} ->
+          if packet.flags.session_present? do
+            republish_unacknowledged_messages(conn, packet)
+          else
+            {:ok, packet, Conn.destroy_session(conn)}
+          end
+
+        {:ok, _packet, conn} ->
+          {:error, Error.protocol_error("unexpected packet received"), conn}
+      end
+    end
+  end
+
   def subscribe(%Conn{} = conn, topic_filters) when is_list(topic_filters) do
     {packet_identifier, conn} = Conn.next_packet_identifier(conn)
 
     packet = PacketBuilder.Subscribe.new(packet_identifier, topic_filters)
-    encoded_packet = Packet.Subscribe.encode!(packet)
 
-    send_packet(conn, encoded_packet)
+    send_packet(conn, packet)
   end
 
   def tick(%Conn{} = conn) do
@@ -122,16 +147,15 @@ defmodule MQTT.Client do
     {packet_identifier, conn} = Conn.next_packet_identifier(conn)
 
     packet = PacketBuilder.Unsubscribe.new(packet_identifier, topic_filters)
-    encoded_packet = Packet.Unsubscribe.encode!(packet)
 
-    send_packet(conn, encoded_packet)
+    send_packet(conn, packet)
   end
 
   # HELPERS
 
   defp send_packet(conn, packet) do
-    with :ok <- conn.transport.send(conn.socket, packet) do
-      {:ok, Conn.packet_sent(conn)}
+    with :ok <- conn.transport.send(conn.socket, Packet.encode!(packet)) do
+      {:ok, Conn.packet_sent(conn, packet)}
     end
   end
 
@@ -163,4 +187,21 @@ defmodule MQTT.Client do
 
   defp default_port(Transport.TCP), do: 1883
   defp default_port(Transport.TLS), do: 8883
+
+  defp republish_unacknowledged_messages(conn, packet) do
+    conn.session
+    |> Session.unacknowledged_packets()
+    |> Enum.reduce_while(conn, fn packet, conn ->
+      dup_packet = PacketBuilder.Publish.with_dup(packet, true)
+
+      case send_packet(conn, dup_packet) do
+        {:ok, conn} -> {:cont, conn}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      %Conn{} = conn -> {:ok, packet, conn}
+      error -> error
+    end
+  end
 end

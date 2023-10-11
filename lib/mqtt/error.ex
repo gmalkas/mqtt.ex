@@ -18,6 +18,13 @@ defmodule MQTT.Error do
     )
   end
 
+  def protocol_error(reason_message) when is_binary(reason_message) do
+    new(
+      :protocol_error,
+      ErrorContext.ProtocolError.new(reason_message)
+    )
+  end
+
   def new(reason_code_name, context) do
     %__MODULE__{reason_code_name: reason_code_name, context: context}
   end
@@ -39,6 +46,14 @@ defmodule MQTT.ErrorContext.MalformedPacket do
 
   def new(reason) when is_nil(reason) or is_binary(reason) do
     %__MODULE__{reason: reason}
+  end
+end
+
+defmodule MQTT.ErrorContext.ProtocolError do
+  defstruct [:reason_message]
+
+  def new(reason_message) when is_nil(reason_message) or is_binary(reason_message) do
+    %__MODULE__{reason_message: reason_message}
   end
 end
 

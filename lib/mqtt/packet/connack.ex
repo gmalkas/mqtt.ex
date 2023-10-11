@@ -1,32 +1,36 @@
 defmodule MQTT.Packet.Connack do
   import MQTT.PacketDecoder, only: [decode_properties: 1, decode_reason_code: 2]
 
-  defstruct [:connect_acknowledge_flags, :connect_reason_code, :properties]
+  defstruct [:flags, :reason_code, :properties]
 
   def decode(data) do
-    with {:ok, connect_acknowledge_flags, rest} <- decode_connect_acknowledge_flags(data),
-         {:ok, connect_reason_code, rest} <- decode_reason_code(:connack, rest),
+    with {:ok, flags, rest} <- __MODULE__.Flags.decode(data),
+         {:ok, reason_code, rest} <- decode_reason_code(:connack, rest),
          {:ok, properties, _, rest} <- decode_properties(rest),
          {:ok, properties} <- validate_properties(properties) do
       {:ok,
        %__MODULE__{
-         connect_acknowledge_flags: connect_acknowledge_flags,
-         connect_reason_code: connect_reason_code,
+         flags: flags,
+         reason_code: reason_code,
          properties: properties
        }, rest}
     end
   end
 
-  defp decode_connect_acknowledge_flags(<<0::7, session_present_flag::1>> <> rest) do
-    {:ok, %{session_present?: session_present_flag == 1}, rest}
-  end
-
-  defp decode_connect_acknowledge_flags(data) when bit_size(data) < 8 do
-    {:error, :incomplete, data}
-  end
-
   defp validate_properties(properties) do
     __MODULE__.Properties.from_decoder(properties)
+  end
+end
+
+defmodule MQTT.Packet.Connack.Flags do
+  defstruct session_present?: false
+
+  def decode(<<0::7, session_present_flag::1>> <> rest) do
+    {:ok, %__MODULE__{session_present?: session_present_flag == 1}, rest}
+  end
+
+  def decode(data) when bit_size(data) < 8 do
+    {:error, :incomplete, data}
   end
 end
 

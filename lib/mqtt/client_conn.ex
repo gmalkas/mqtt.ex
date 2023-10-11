@@ -1,34 +1,41 @@
 defmodule MQTT.ClientConn do
   alias MQTT.{Error, Packet}
-
-  @max_packet_identifier 0xFFFF
+  alias MQTT.ClientSession, as: Session
 
   defstruct [
     :client_id,
+    :connect_packet,
     :connack_properties,
     :keep_alive,
     :last_packet_sent_at,
     :host,
-    :packet_identifiers,
     :port,
     :read_buffer,
+    :session,
     :socket,
     :state,
-    :transport
+    :transport,
+    :transport_opts
   ]
 
-  def connecting(transport, host, port, socket, %Packet.Connect{} = packet) do
+  def connecting({transport, transport_opts}, host, port, socket, %Packet.Connect{} = packet) do
     %__MODULE__{
       client_id: packet.payload.client_id,
+      connect_packet: packet,
       host: host,
       keep_alive: packet.keep_alive,
-      packet_identifiers: MapSet.new(),
       port: port,
       read_buffer: "",
+      session: Session.new(),
       socket: socket,
       state: :connecting,
-      transport: transport
+      transport: transport,
+      transport_opts: transport_opts
     }
+  end
+
+  def destroy_session(%__MODULE__{} = conn) do
+    %__MODULE__{conn | session: Session.new()}
   end
 
   def disconnect(%__MODULE__{} = conn) do
@@ -40,18 +47,21 @@ defmodule MQTT.ClientConn do
   end
 
   def next_packet_identifier(%__MODULE__{} = conn) do
-    identifier = :rand.uniform(@max_packet_identifier)
+    {packet_identifier, session} = Session.allocate_packet_identifier(conn.session)
 
-    if !MapSet.member?(conn.packet_identifiers, identifier) do
-      {identifier,
-       %__MODULE__{conn | packet_identifiers: MapSet.put(conn.packet_identifiers, identifier)}}
-    else
-      next_packet_identifier(conn)
-    end
+    {packet_identifier, %__MODULE__{conn | session: session}}
   end
 
-  def packet_sent(%__MODULE__{} = conn) do
-    %__MODULE__{conn | last_packet_sent_at: monotonic_time()}
+  def packet_sent(%__MODULE__{} = conn, packet) do
+    %__MODULE__{
+      conn
+      | last_packet_sent_at: monotonic_time(),
+        session: Session.handle_packet_from_client(conn.session, packet)
+    }
+  end
+
+  def reconnecting(%__MODULE__{state: :disconnected} = conn, socket) do
+    %__MODULE__{conn | socket: socket, state: :reconnecting}
   end
 
   def retain_available?(%__MODULE__{} = conn) do
@@ -91,11 +101,11 @@ defmodule MQTT.ClientConn do
   end
 
   defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Suback{} = packet) do
-    if MapSet.member?(conn.packet_identifiers, packet.packet_identifier) do
+    if Session.has_packet_identifier?(conn.session, packet.packet_identifier) do
       {:ok,
        %__MODULE__{
          conn
-         | packet_identifiers: MapSet.delete(conn.packet_identifiers, packet.packet_identifier)
+         | session: Session.free_packet_identifier(conn.session, packet.packet_identifier)
        }}
     else
       {:error, Error.packet_identifier_not_found(packet.packet_identifier)}
@@ -103,11 +113,11 @@ defmodule MQTT.ClientConn do
   end
 
   defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Unsuback{} = packet) do
-    if MapSet.member?(conn.packet_identifiers, packet.packet_identifier) do
+    if Session.has_packet_identifier?(conn.session, packet.packet_identifier) do
       {:ok,
        %__MODULE__{
          conn
-         | packet_identifiers: MapSet.delete(conn.packet_identifiers, packet.packet_identifier)
+         | session: Session.free_packet_identifier(conn.session, packet.packet_identifier)
        }}
     else
       {:error, Error.packet_identifier_not_found(packet.packet_identifier)}
@@ -115,11 +125,11 @@ defmodule MQTT.ClientConn do
   end
 
   defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Puback{} = packet) do
-    if MapSet.member?(conn.packet_identifiers, packet.packet_identifier) do
+    if Session.has_packet_identifier?(conn.session, packet.packet_identifier) do
       {:ok,
        %__MODULE__{
          conn
-         | packet_identifiers: MapSet.delete(conn.packet_identifiers, packet.packet_identifier)
+         | session: Session.handle_packet_from_server(conn.session, packet)
        }}
     else
       {:error, Error.packet_identifier_not_found(packet.packet_identifier)}
