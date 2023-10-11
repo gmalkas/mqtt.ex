@@ -30,7 +30,7 @@ defmodule MQTT.Packet.Connack.Flags do
   end
 
   def decode(data) when bit_size(data) < 8 do
-    {:error, :incomplete, data}
+    {:error, :incomplete_packet, data}
   end
 end
 

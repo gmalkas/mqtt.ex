@@ -28,7 +28,7 @@ defmodule MQTT.PacketDecoder do
   end
 
   defp decode_fixed_header(rest) when bit_size(rest) < 8 do
-    {:error, :incomplete}
+    {:error, :incomplete_packet}
   end
 
   defp decode_fixed_header(_rest), do: {:error, Error.malformed_packet("unexpected fixed header")}
@@ -168,7 +168,7 @@ defmodule MQTT.PacketDecoder do
   end
 
   def decode_byte(data) when bit_size(data) < 8 do
-    {:error, :incomplete}
+    {:error, :incomplete_packet}
   end
 
   def decode_two_byte_integer(<<value::16-big>> <> rest) do
@@ -176,7 +176,7 @@ defmodule MQTT.PacketDecoder do
   end
 
   def decode_two_byte_integer(data) when bit_size(data) < 16 do
-    {:error, :incomplete}
+    {:error, :incomplete_packet}
   end
 
   def decode_four_byte_integer(<<value::32-big>> <> rest) do
@@ -184,7 +184,7 @@ defmodule MQTT.PacketDecoder do
   end
 
   def decode_four_byte_integer(data) when bit_size(data) < 32 do
-    {:error, :incomplete}
+    {:error, :incomplete_packet}
   end
 
   def decode_binary_data(data) do
@@ -196,7 +196,7 @@ defmodule MQTT.PacketDecoder do
   def decode_binary_data(data, 0), do: {:ok, "", data}
 
   def decode_binary_data(data, length) when byte_size(data) < length do
-    {:error, :incomplete}
+    {:error, :incomplete_packet}
   end
 
   def decode_binary_data(data, length) do
@@ -214,7 +214,7 @@ defmodule MQTT.PacketDecoder do
   def decode_utf8_string(data, 0), do: {:ok, "", data}
 
   def decode_utf8_string(data, string_length) when byte_size(data) < string_length do
-    {:error, :incomplete}
+    {:error, :incomplete_packet}
   end
 
   def decode_utf8_string(data, string_length) do
@@ -262,7 +262,7 @@ defmodule MQTT.PacketDecoder do
   end
 
   def decode_variable_byte_integer(rest, _values) when bit_size(rest) < 8 do
-    {:error, :incomplete}
+    {:error, :incomplete_packet}
   end
 
   def decode_packet_identifier(data), do: decode_two_byte_integer(data)
@@ -275,6 +275,6 @@ defmodule MQTT.PacketDecoder do
   end
 
   def decode_reason_code(_, data) when byte_size(data) < 1 do
-    {:error, :incomplete, data}
+    {:error, :incomplete_packet, data}
   end
 end

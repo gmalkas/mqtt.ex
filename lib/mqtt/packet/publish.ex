@@ -119,7 +119,7 @@ defmodule MQTT.Packet.Publish.Payload do
 
       {:ok, %__MODULE__{data: payload}, rest}
     else
-      {:error, :incomplete, data}
+      {:error, :incomplete_packet, data}
     end
   end
 
