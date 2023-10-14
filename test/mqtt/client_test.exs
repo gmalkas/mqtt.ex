@@ -1,7 +1,7 @@
 defmodule MQTT.ClientTest do
   use ExUnit.Case, async: false
 
-  alias MQTT.{Packet, TransportError}
+  alias MQTT.{Packet, PacketBuilder, TransportError}
   alias MQTT.ClientSession, as: Session
   alias MQTT.ClientConn, as: Conn
 
@@ -397,7 +397,7 @@ defmodule MQTT.ClientTest do
   test "supports topic aliases" do
     {:ok, conn, tracer_port} = connect_and_wait_for_connack()
 
-    # VerneMQ does not specifyc the `topic_alias_maximum` property despite
+    # VerneMQ does not specify the `topic_alias_maximum` property despite
     # supporting topic aliases, so to test this we hardcode it to something > 0.
     conn = Conn.set_topic_alias_maximum(conn, 5)
 
@@ -445,6 +445,38 @@ defmodule MQTT.ClientTest do
              tracer_port,
              {:pingresp, conn.client_id}
            )
+  end
+
+  test "supports QoS 2" do
+    {:ok, conn, tracer_port} = connect_and_wait_for_connack()
+
+    topic = "/my/topic"
+    payload = "Hello world!"
+
+    assert {:ok, conn} = MQTT.Client.publish(conn, topic, payload, qos: 2)
+
+    assert MQTT.Test.Tracer.wait_for_trace(
+             tracer_port,
+             {:publish, conn.client_id, topic}
+           )
+
+    assert MQTT.Test.Tracer.wait_for_trace(
+             tracer_port,
+             {:pubrec, conn.client_id}
+           )
+
+    assert {:ok, %Packet.Pubrec{} = pubrec_packet, conn} = MQTT.Client.read_next_packet(conn)
+
+    pubrel_packet = PacketBuilder.Pubrel.new(pubrec_packet.packet_identifier)
+    assert {:ok, conn} = MQTT.Client.send_packet(conn, pubrel_packet)
+
+    assert MQTT.Test.Tracer.wait_for_trace(
+             tracer_port,
+             {:pubcomp, conn.client_id}
+           )
+
+    assert {:ok, %Packet.Pubcomp{} = pubcomp_packet, _conn} = MQTT.Client.read_next_packet(conn)
+    assert pubrec_packet.packet_identifier == pubcomp_packet.packet_identifier
   end
 
   defp connect(options \\ []) do

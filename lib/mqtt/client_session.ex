@@ -36,34 +36,55 @@ defmodule MQTT.ClientSession do
   end
 
   def handle_packet_from_client(%__MODULE__{} = session, %Packet.Publish{} = packet) do
-    if packet.flags.qos == 1 &&
-         !Map.has_key?(session.unacknowledged_packets, packet.packet_identifier) do
-      %__MODULE__{
+    cond do
+      packet.flags.qos > 0 &&
+          !Map.has_key?(session.unacknowledged_packets, packet.packet_identifier) ->
+        %__MODULE__{
+          session
+          | unacknowledged_packets:
+              Map.put(session.unacknowledged_packets, packet.packet_identifier, packet),
+            unacknowledged_packet_identifiers: [
+              packet.packet_identifier | session.unacknowledged_packet_identifiers
+            ]
+        }
+
+      true ->
         session
-        | unacknowledged_packets:
-            Map.put(session.unacknowledged_packets, packet.packet_identifier, packet),
-          unacknowledged_packet_identifiers: [
-            packet.packet_identifier | session.unacknowledged_packet_identifiers
-          ]
-      }
-    else
-      session
     end
+  end
+
+  def handle_packet_from_client(%__MODULE__{} = session, %Packet.Pubrel{} = packet) do
+    %__MODULE__{
+      session
+      | unacknowledged_packets:
+          Map.put(session.unacknowledged_packets, packet.packet_identifier, packet),
+        unacknowledged_packet_identifiers: [
+          packet.packet_identifier | session.unacknowledged_packet_identifiers
+        ]
+    }
   end
 
   def handle_packet_from_client(%__MODULE__{} = session, _packet) do
     session
   end
 
-  def handle_packet_from_server(%__MODULE__{} = session, %Packet.Puback{} = packet) do
-    %__MODULE__{
-      session
-      | unacknowledged_packets:
-          Map.delete(session.unacknowledged_packets, packet.packet_identifier),
-        unacknowledged_packet_identifiers:
-          List.delete(session.unacknowledged_packet_identifiers, packet.packet_identifier)
-    }
+  def handle_packet_from_server(%__MODULE__{} = session, %module{} = packet)
+      when module in [Packet.Publish, Packet.Pubcomp] do
+    session
+    |> packet_acknowledged(packet)
     |> free_packet_identifier(packet.packet_identifier)
+  end
+
+  def handle_packet_from_server(%__MODULE__{} = session, %Packet.Pubrec{} = packet) do
+    # [MQTT-4.3.3]: The Packet Identifier becomes available for reuse once the
+    # sender has received the PUBCOMP packet or a PUBREC with a Reason Code of
+    # 0x80 or greater.
+
+    if Packet.indicates_error?(packet) do
+      free_packet_identifier(session, packet.packet_identifier)
+    else
+      packet_acknowledged(session, packet)
+    end
   end
 
   def handle_packet_from_server(%__MODULE__{} = session, packet) do
@@ -82,4 +103,14 @@ defmodule MQTT.ClientSession do
 
   def unacknowledged_message_count(%__MODULE__{} = session),
     do: map_size(session.unacknowledged_packets)
+
+  defp packet_acknowledged(%__MODULE__{} = session, packet) do
+    %__MODULE__{
+      session
+      | unacknowledged_packets:
+          Map.delete(session.unacknowledged_packets, packet.packet_identifier),
+        unacknowledged_packet_identifiers:
+          List.delete(session.unacknowledged_packet_identifiers, packet.packet_identifier)
+    }
+  end
 end

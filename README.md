@@ -28,7 +28,7 @@ Here are the objectives, in order of importance:
     - [x] QoS 1
     - [x] Topic Alias
     - [x] Topic Alias Maximum
-    - [ ] QoS 2
+    - [x] QoS 2
     - [ ] Process-based API
     - [ ] Server redirection
     - [ ] Keep-alive

@@ -74,6 +74,14 @@ defmodule MQTT.Test.Tracer do
     read_from_port_until_trace(port, ~s(MQTT SEND: CID: "#{client_id}" PUBACK))
   end
 
+  def wait_for_trace(port, {:pubrec, client_id}) do
+    read_from_port_until_trace(port, ~s(MQTT SEND: CID: "#{client_id}" PUBREC))
+  end
+
+  def wait_for_trace(port, {:pubcomp, client_id}) do
+    read_from_port_until_trace(port, ~s(MQTT SEND: CID: "#{client_id}" PUBCOMP))
+  end
+
   def wait_for_trace(port, {:disconnect, client_id}) do
     read_from_port_until_trace(port, ~s(MQTT RECV: CID: "#{client_id}" DISCONNECT))
   end

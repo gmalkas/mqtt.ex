@@ -130,6 +130,12 @@ defmodule MQTT.Client do
     end
   end
 
+  def send_packet(%Conn{} = conn, packet) do
+    with :ok <- conn.transport.send(conn.socket, Packet.encode!(packet)) do
+      {:ok, Conn.packet_sent(conn, packet)}
+    end
+  end
+
   def subscribe(%Conn{} = conn, topic_filters) when is_list(topic_filters) do
     {packet_identifier, conn} = Conn.next_packet_identifier(conn)
 
@@ -155,12 +161,6 @@ defmodule MQTT.Client do
   end
 
   # HELPERS
-
-  defp send_packet(conn, packet) do
-    with :ok <- conn.transport.send(conn.socket, Packet.encode!(packet)) do
-      {:ok, Conn.packet_sent(conn, packet)}
-    end
-  end
 
   defp do_read_next_packet(conn, buffer) do
     if byte_size(buffer) > 0 do
@@ -193,10 +193,21 @@ defmodule MQTT.Client do
   defp default_port(Transport.TLS), do: 8883
 
   defp republish_unacknowledged_messages(conn, packet) do
+    # When a Client reconnects with Clean Start set to 0 and a session is
+    # present, both the Client and Server MUST resend any unacknowledged
+    # PUBLISH packets (where QoS > 0) and PUBREL packets using their original
+    # Packet Identifiers. This is the only circumstance where a Client or
+    # Server is REQUIRED to resend messages. Clients and Servers MUST NOT
+    # resend messages at any other time [MQTT-4.4.0-1].
+
     conn.session
     |> Session.unacknowledged_packets()
     |> Enum.reduce_while(conn, fn packet, conn ->
-      dup_packet = PacketBuilder.Publish.with_dup(packet, true)
+      dup_packet =
+        case packet do
+          %Packet.Publish{} -> PacketBuilder.Publish.with_dup(packet, true)
+          %Packet.Pubrel{} -> packet
+        end
 
       case send_packet(conn, dup_packet) do
         {:ok, conn} -> {:cont, conn}

@@ -47,7 +47,8 @@ defmodule MQTT.PacketDecoder do
     do: {:ok, %{dup: dup, qos: qos, retain: retain}}
 
   defp decode_header_flags(:puback, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
-  defp decode_header_flags(:pubrel, <<0::1, 0::1, 1, 0::1>>), do: {:ok, %{}}
+  defp decode_header_flags(:pubrec, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
+  defp decode_header_flags(:pubrel, <<0::1, 0::1, 1::1, 0::1>>), do: {:ok, %{}}
   defp decode_header_flags(:pubcomp, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
   defp decode_header_flags(:subscribe, <<0::1, 0::1, 1, 0::1>>), do: {:ok, %{}}
   defp decode_header_flags(:suback, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
@@ -87,6 +88,18 @@ defmodule MQTT.PacketDecoder do
 
   defp decode_packet(:puback, _flags, remaining_length, data) do
     Packet.Puback.decode(data, remaining_length)
+  end
+
+  defp decode_packet(:pubrec, _flags, remaining_length, data) do
+    Packet.Pubrec.decode(data, remaining_length)
+  end
+
+  defp decode_packet(:pubrel, _flags, remaining_length, data) do
+    Packet.Pubrel.decode(data, remaining_length)
+  end
+
+  defp decode_packet(:pubcomp, _flags, remaining_length, data) do
+    Packet.Pubcomp.decode(data, remaining_length)
   end
 
   def decode_properties(data) do

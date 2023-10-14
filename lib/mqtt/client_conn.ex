@@ -150,7 +150,7 @@ defmodule MQTT.ClientConn do
       {:ok,
        %__MODULE__{
          conn
-         | session: Session.free_packet_identifier(conn.session, packet.packet_identifier)
+         | session: Session.handle_packet_from_server(conn.session, packet)
        }}
     else
       {:error, Error.packet_identifier_not_found(packet.packet_identifier)}
@@ -162,14 +162,15 @@ defmodule MQTT.ClientConn do
       {:ok,
        %__MODULE__{
          conn
-         | session: Session.free_packet_identifier(conn.session, packet.packet_identifier)
+         | session: Session.handle_packet_from_server(conn.session, packet)
        }}
     else
       {:error, Error.packet_identifier_not_found(packet.packet_identifier)}
     end
   end
 
-  defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Puback{} = packet) do
+  defp do_handle_packet_from_server(%__MODULE__{} = conn, %module{} = packet)
+       when module in [Packet.Puback, Packet.Pubrec, Packet.Pubcomp] do
     if Session.has_packet_identifier?(conn.session, packet.packet_identifier) do
       {:ok,
        %__MODULE__{

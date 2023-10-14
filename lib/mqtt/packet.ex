@@ -60,6 +60,9 @@ defmodule MQTT.Packet do
     {:connack, 0} => :success,
     {:connack, 134} => :bad_user_name_or_password,
     {:puback, 0} => :success,
+    {:pubrec, 0} => :success,
+    {:pubrel, 0} => :success,
+    {:pubcomp, 0} => :success,
     {:puback, 131} => :implementation_specific_error,
     {:disconnect, 0} => :normal_disconnection,
     {:disconnect, 4} => :disconnect_with_will_message,
@@ -70,17 +73,23 @@ defmodule MQTT.Packet do
                          {name, value}
                        end)
                        |> Map.new()
+  @reason_code_error_threshold 0x80
 
   def encode!(%packet_module{} = packet)
       when packet_module in [
              __MODULE__.Connect,
              __MODULE__.Publish,
+             __MODULE__.Pubrel,
              __MODULE__.Subscribe,
              __MODULE__.Unsubscribe,
              __MODULE__.Disconnect,
              __MODULE__.Pingreq
            ] do
     packet_module.encode!(packet)
+  end
+
+  def indicates_error?(%{reason_code: reason_code}) do
+    reason_code_by_name!(reason_code) >= @reason_code_error_threshold
   end
 
   def property_by_name!(name), do: Map.fetch!(@property_by_name, name)
