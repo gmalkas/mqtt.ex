@@ -17,11 +17,19 @@ defmodule MQTT.Transport.TCP do
   def connect(host, port, opts) when is_binary(host) do
     host = String.to_charlist(host)
 
-    wrap_error(:gen_tcp.connect(host, port, Keyword.merge(opts, @transport_opts)))
+    with {:ok, socket} <- :gen_tcp.connect(host, port, Keyword.merge(opts, @transport_opts)) do
+      {:ok, socket}
+    else
+      error -> wrap_error(error)
+    end
   end
 
   def recv(socket, byte_count, timeout) do
-    wrap_error(:gen_tcp.recv(socket, byte_count, timeout))
+    with {:ok, packet} <- :gen_tcp.recv(socket, byte_count, timeout) do
+      {:ok, socket, packet}
+    else
+      error -> wrap_error(error)
+    end
   end
 
   def send(socket, payload) do
@@ -29,7 +37,11 @@ defmodule MQTT.Transport.TCP do
       "socket=#{inspect(socket)}, action=send, size=#{byte_size(payload)}, data=#{Base.encode16(payload)}"
     )
 
-    wrap_error(:gen_tcp.send(socket, payload))
+    with :ok <- :gen_tcp.send(socket, payload) do
+      {:ok, socket}
+    else
+      error -> wrap_error(error)
+    end
   end
 
   defp wrap_error({:error, reason}), do: {:error, %TransportError{reason: reason}}

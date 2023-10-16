@@ -16,14 +16,14 @@ defmodule MQTT.ClientConn do
     :port,
     :read_buffer,
     :session,
-    :socket,
+    :handle,
     :state,
     :topic_aliases,
     :transport,
     :transport_opts
   ]
 
-  def connecting({transport, transport_opts}, host, port, socket, %Packet.Connect{} = packet) do
+  def connecting({transport, transport_opts}, host, port, handle, %Packet.Connect{} = packet) do
     %__MODULE__{
       client_id: packet.payload.client_id,
       connect_packet: packet,
@@ -33,7 +33,7 @@ defmodule MQTT.ClientConn do
       next_topic_alias: @initial_topic_alias,
       read_buffer: "",
       session: Session.new(),
-      socket: socket,
+      handle: handle,
       state: :connecting,
       topic_aliases: %{},
       transport: transport,
@@ -80,18 +80,19 @@ defmodule MQTT.ClientConn do
     end
   end
 
-  def packet_sent(%__MODULE__{} = conn, packet) do
+  def packet_sent(%__MODULE__{} = conn, handle, packet) do
     %__MODULE__{
       conn
-      | last_packet_sent_at: monotonic_time(),
+      | handle: handle,
+        last_packet_sent_at: monotonic_time(),
         session: Session.handle_packet_from_client(conn.session, packet)
     }
   end
 
-  def reconnecting(%__MODULE__{state: :disconnected} = conn, socket) do
+  def reconnecting(%__MODULE__{state: :disconnected} = conn, handle) do
     %__MODULE__{
       conn
-      | socket: socket,
+      | handle: handle,
         state: :reconnecting,
         topic_aliases: %{},
         next_topic_alias: @initial_topic_alias
@@ -118,6 +119,10 @@ defmodule MQTT.ClientConn do
   def should_ping?(%__MODULE__{} = conn) do
     is_nil(conn.last_packet_sent_at) ||
       monotonic_time() - conn.last_packet_sent_at > conn.keep_alive
+  end
+
+  def update_handle(%__MODULE__{} = conn, handle) do
+    %__MODULE__{conn | handle: handle}
   end
 
   defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Connack{} = packet) do

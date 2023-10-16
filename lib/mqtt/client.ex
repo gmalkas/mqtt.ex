@@ -50,9 +50,9 @@ defmodule MQTT.Client do
 
     Logger.info("host=#{host}, port=#{port}, action=connect")
 
-    with {:ok, socket} <- transport.connect(host, port, transport_opts) do
+    with {:ok, handle} <- transport.connect(host, port, transport_opts) do
       send_packet(
-        Conn.connecting({transport, transport_opts}, host, port, socket, packet),
+        Conn.connecting({transport, transport_opts}, host, port, handle, packet),
         packet
       )
     end
@@ -62,13 +62,13 @@ defmodule MQTT.Client do
     packet = PacketBuilder.Disconnect.new(reason_code)
 
     with {:ok, conn} <- send_packet(conn, packet),
-         :ok <- conn.transport.close(conn.socket) do
+         :ok <- conn.transport.close(conn.handle) do
       Conn.disconnect(conn)
     end
   end
 
   def disconnect!(%Conn{} = conn) do
-    with :ok <- conn.transport.close(conn.socket) do
+    with :ok <- conn.transport.close(conn.handle) do
       Conn.disconnect(conn)
     end
   end
@@ -103,8 +103,9 @@ defmodule MQTT.Client do
   end
 
   def read_next_packet(%Conn{} = conn) do
-    with {:ok, packet, buffer} <- do_read_next_packet(conn, conn.read_buffer),
-         {:ok, conn} <- Conn.handle_packet_from_server(conn, packet, buffer) do
+    with {:ok, handle, packet, buffer} <- do_read_next_packet(conn, conn.read_buffer),
+         {:ok, conn} <-
+           Conn.handle_packet_from_server(Conn.update_handle(conn, handle), packet, buffer) do
       {:ok, packet, conn}
     end
   end
@@ -114,8 +115,8 @@ defmodule MQTT.Client do
 
     Logger.info("host=#{conn.host}, port=#{conn.port}, action=reconnect")
 
-    with {:ok, socket} <- conn.transport.connect(conn.host, conn.port, conn.transport_opts),
-         {:ok, conn} <- send_packet(Conn.reconnecting(conn, socket), connect_packet) do
+    with {:ok, handle} <- conn.transport.connect(conn.host, conn.port, conn.transport_opts),
+         {:ok, conn} <- send_packet(Conn.reconnecting(conn, handle), connect_packet) do
       case read_next_packet(conn) do
         {:ok, %Packet.Connack{} = packet, conn} ->
           if packet.flags.session_present? do
@@ -131,8 +132,8 @@ defmodule MQTT.Client do
   end
 
   def send_packet(%Conn{} = conn, packet) do
-    with :ok <- conn.transport.send(conn.socket, Packet.encode!(packet)) do
-      {:ok, Conn.packet_sent(conn, packet)}
+    with {:ok, handle} <- conn.transport.send(conn.handle, Packet.encode!(packet)) do
+      {:ok, Conn.packet_sent(conn, handle, packet)}
     end
   end
 
@@ -165,7 +166,7 @@ defmodule MQTT.Client do
   defp do_read_next_packet(conn, buffer) do
     if byte_size(buffer) > 0 do
       case PacketDecoder.decode(buffer) do
-        {:ok, packet, buffer} -> {:ok, packet, buffer}
+        {:ok, packet, buffer} -> {:ok, conn.handle, packet, buffer}
         {:error, :incomplete_packet} -> do_read_next_packet_from_socket(conn, buffer)
       end
     else
@@ -174,23 +175,29 @@ defmodule MQTT.Client do
   end
 
   defp do_read_next_packet_from_socket(conn, buffer) do
-    with {:ok, data} <- conn.transport.recv(conn.socket, 0, @default_read_timeout_ms) do
+    with {:ok, handle, data} <- conn.transport.recv(conn.handle, 0, @default_read_timeout_ms) do
       Logger.debug(
-        "socket=#{inspect(conn.socket)}, action=read, size=#{byte_size(data)}, data=#{Base.encode16(data)}"
+        "handle=#{inspect(conn.handle)}, action=read, size=#{byte_size(data)}, data=#{Base.encode16(data)}"
       )
 
       buffer = buffer <> data
 
       case PacketDecoder.decode(buffer) do
-        {:ok, packet, buffer} -> {:ok, packet, buffer}
-        {:error, :incomplete_packet} -> do_read_next_packet_from_socket(conn, buffer)
-        other_error -> other_error
+        {:ok, packet, buffer} ->
+          {:ok, handle, packet, buffer}
+
+        {:error, :incomplete_packet} ->
+          do_read_next_packet_from_socket(Conn.update_handle(conn, handle), buffer)
+
+        other_error ->
+          other_error
       end
     end
   end
 
   defp default_port(Transport.TCP), do: 1883
   defp default_port(Transport.TLS), do: 8883
+  defp default_port(Transport.Websocket), do: 80
 
   defp republish_unacknowledged_messages(conn, packet) do
     # When a Client reconnects with Clean Start set to 0 and a session is

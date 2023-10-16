@@ -13,6 +13,7 @@ allow_anonymous = on
 listener.ssl.name = 127.0.0.1:8883
 listener.ssl.certfile = ./etc/cert.pem
 listener.ssl.keyfile = ./etc/key.pem
+listener.ws.default = 127.0.0.1:8866
 EOF
 
 echo "Adding user entry for 'mqttex_basic'..."

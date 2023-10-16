@@ -29,7 +29,8 @@ Here are the objectives, in order of importance:
     - [x] Topic Alias
     - [x] Topic Alias Maximum
     - [x] QoS 2
-    - [ ] Process-based API
+    - [x] Transport over WebSocket
+    - [ ] Event-driven API
     - [ ] Server redirection
     - [ ] Keep-alive
     - [ ] Receive Maximum
@@ -42,5 +43,4 @@ Here are the objectives, in order of importance:
     - [ ] Support all properties
     - [ ] IPv6
     - [ ] Authentication with TLS client certificate
-    - [ ] Transport over WebSocket
     - [ ] Add support for MQTT v3.1.1

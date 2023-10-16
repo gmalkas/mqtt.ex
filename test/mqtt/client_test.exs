@@ -47,6 +47,23 @@ defmodule MQTT.ClientTest do
       assert :connected = conn.state
     end
 
+    test "connects to a MQTT server over websocket" do
+      {:ok, conn, tracer_port} =
+        connect(
+          address: "localhost",
+          port: 8866,
+          transport: MQTT.Transport.Websocket,
+          transport_opts: [path: "/mqtt"]
+        )
+
+      assert :connecting = conn.state
+      assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connect, conn.client_id})
+      assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
+      assert {:ok, %Packet.Connack{} = packet, conn} = MQTT.Client.read_next_packet(conn)
+      assert :success = packet.reason_code
+      assert :connected = conn.state
+    end
+
     test "supports receiving client ID from server" do
       {:ok, conn} = connect(client_id: nil, tracer?: false)
 
@@ -486,6 +503,7 @@ defmodule MQTT.ClientTest do
 
     connect_options =
       Keyword.take(options, [
+        :port,
         :keep_alive,
         :user_name,
         :password,

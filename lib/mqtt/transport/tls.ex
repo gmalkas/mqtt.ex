@@ -26,11 +26,20 @@ defmodule MQTT.Transport.TLS do
   def connect(host, port, opts) when is_binary(host) do
     host = String.to_charlist(host)
 
-    wrap_error(:ssl.connect(host, port, Keyword.merge(opts, @transport_opts ++ @tls_opts)))
+    with {:ok, socket} <-
+           :ssl.connect(host, port, Keyword.merge(opts, @transport_opts ++ @tls_opts)) do
+      {:ok, socket}
+    else
+      error -> wrap_error(error)
+    end
   end
 
   def recv(socket, byte_count, timeout) do
-    wrap_error(:ssl.recv(socket, byte_count, timeout))
+    with {:ok, data} <- :ssl.recv(socket, byte_count, timeout) do
+      {:ok, socket, data}
+    else
+      error -> wrap_error(error)
+    end
   end
 
   def send(socket, payload) do
@@ -38,7 +47,11 @@ defmodule MQTT.Transport.TLS do
       "socket=#{inspect(socket)}, action=send, size=#{byte_size(payload)}, data=#{Base.encode16(payload)}"
     )
 
-    wrap_error(:ssl.send(socket, payload))
+    with :ok <- :ssl.send(socket, payload) do
+      {:ok, socket}
+    else
+      error -> wrap_error(error)
+    end
   end
 
   defp wrap_error({:error, reason}), do: {:error, %TransportError{reason: reason}}
