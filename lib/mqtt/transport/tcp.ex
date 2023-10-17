@@ -3,24 +3,51 @@ defmodule MQTT.Transport.TCP do
 
   alias MQTT.TransportError
 
-  @transport_opts [
-    :binary,
+  @default_port 1883
+  @allowed_options [:keepalive, :ip, :ifaddr, :nodelay]
+  @enforced_options [
     active: false,
-    keepalive: true,
-    nodelay: true
+    mode: :binary,
+    packet: :raw
   ]
 
   def close(socket) do
     :gen_tcp.close(socket)
   end
 
-  def connect(host, port, opts) when is_binary(host) do
+  def connect(host, opts) when is_binary(host) do
+    connect({host, @default_port}, opts)
+  end
+
+  def connect({host, port}, opts) when is_binary(host) and is_integer(port) do
     host = String.to_charlist(host)
 
-    with {:ok, socket} <- :gen_tcp.connect(host, port, Keyword.merge(opts, @transport_opts)) do
-      {:ok, socket}
+    hostname_or_ip_address =
+      case :inet.parse_address(host) do
+        {:ok, ip_address} -> ip_address
+        {:error, :einval} -> host
+      end
+
+    use_ipv6? = Keyword.get(opts, :inet6, false)
+
+    options =
+      opts
+      |> Keyword.take(@allowed_options)
+      |> Keyword.merge(@enforced_options)
+
+    if use_ipv6? do
+      case do_connect(hostname_or_ip_address, port, [:inet6 | options]) do
+        {:ok, socket} ->
+          {:ok, socket}
+
+        _error ->
+          # We fallback to IPv4 if IPv6 does not work. This assumes a hostname
+          # was provided rather than a IPv6 address as otherwise retrying is
+          # not going to help.
+          do_connect(hostname_or_ip_address, port, options)
+      end
     else
-      error -> wrap_error(error)
+      do_connect(hostname_or_ip_address, port, options)
     end
   end
 
@@ -40,6 +67,13 @@ defmodule MQTT.Transport.TCP do
     with :ok <- :gen_tcp.send(socket, payload) do
       {:ok, socket}
     else
+      error -> wrap_error(error)
+    end
+  end
+
+  defp do_connect(host, port, options) do
+    case :gen_tcp.connect(host, port, options) do
+      {:ok, socket} -> {:ok, socket}
       error -> wrap_error(error)
     end
   end

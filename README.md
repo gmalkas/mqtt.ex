@@ -7,7 +7,7 @@ server Elixir implementations of the MQTT protocol.
 
 Here are the objectives, in order of importance:
 - Spec-compliant
-  - Full support for MQTT 3.1.1 and MQTT 5
+  - Full support for MQTT 3.1, 3.1.1 and MQTT 5
 - Easy-to-use:
     - Idiomatic Elixir
     - Surprise-free: if you are familiar with the MQTT spec or have worked with MQTT clients/servers before, you should not be surprised by this library.
@@ -30,6 +30,7 @@ Here are the objectives, in order of importance:
     - [x] Topic Alias Maximum
     - [x] QoS 2
     - [x] Transport over WebSocket
+    - [x] IPv6
     - [ ] Event-driven API
     - [ ] Server redirection
     - [ ] Keep-alive
@@ -41,6 +42,7 @@ Here are the objectives, in order of importance:
     - [ ] Support for AUTH packet
     - [ ] Support all reason codes
     - [ ] Support all properties
-    - [ ] IPv6
-    - [ ] Authentication with TLS client certificate
     - [ ] Add support for MQTT v3.1.1
+    - [ ] Add support for MQTT v3.1
+    - [ ] Transport over Unix sockets
+    - [ ] Secure default ciphers for TLS transport

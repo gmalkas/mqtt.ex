@@ -7,10 +7,9 @@ defmodule MQTT.Client do
 
   @default_read_timeout_ms 500
 
-  def connect(host, client_id, options \\ []) do
+  def connect(endpoint, client_id, options \\ []) do
     transport = Keyword.get(options, :transport, Transport.TCP)
     transport_opts = Keyword.get(options, :transport_opts, [])
-    port = Keyword.get(options, :port, default_port(transport))
 
     user_name = Keyword.get(options, :user_name)
     password = Keyword.get(options, :password)
@@ -48,11 +47,11 @@ defmodule MQTT.Client do
           PacketBuilder.Connect.with_will_message(packet, topic, payload, options)
       end
 
-    Logger.info("host=#{host}, port=#{port}, action=connect")
+    Logger.info("endpoint=#{inspect(endpoint)}, action=connect")
 
-    with {:ok, handle} <- transport.connect(host, port, transport_opts) do
+    with {:ok, handle} <- transport.connect(endpoint, transport_opts) do
       send_packet(
-        Conn.connecting({transport, transport_opts}, host, port, handle, packet),
+        Conn.connecting({transport, transport_opts}, endpoint, handle, packet),
         packet
       )
     end
@@ -113,9 +112,9 @@ defmodule MQTT.Client do
   def reconnect(%Conn{state: :disconnected} = conn) do
     connect_packet = PacketBuilder.Connect.with_clean_start(conn.connect_packet, false)
 
-    Logger.info("host=#{conn.host}, port=#{conn.port}, action=reconnect")
+    Logger.info("endpoint=#{inspect(conn.endpoint)}, action=reconnect")
 
-    with {:ok, handle} <- conn.transport.connect(conn.host, conn.port, conn.transport_opts),
+    with {:ok, handle} <- conn.transport.connect(conn.endpoint, conn.transport_opts),
          {:ok, conn} <- send_packet(Conn.reconnecting(conn, handle), connect_packet) do
       case read_next_packet(conn) do
         {:ok, %Packet.Connack{} = packet, conn} ->
@@ -194,10 +193,6 @@ defmodule MQTT.Client do
       end
     end
   end
-
-  defp default_port(Transport.TCP), do: 1883
-  defp default_port(Transport.TLS), do: 8883
-  defp default_port(Transport.Websocket), do: 80
 
   defp republish_unacknowledged_messages(conn, packet) do
     # When a Client reconnects with Clean Start set to 0 and a session is

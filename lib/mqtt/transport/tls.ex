@@ -3,15 +3,27 @@ defmodule MQTT.Transport.TLS do
 
   alias MQTT.TransportError
 
+  @default_port 8883
   @default_versions [:"tlsv1.3", :"tlsv1.2"]
-  @transport_opts [
-    mode: :binary,
-    active: false,
-    keepalive: true,
-    nodelay: true
+
+  @allowed_options [
+    :verify,
+    :verify_fun,
+    :cacerts,
+    :cacertfile,
+    :cert,
+    :certfile,
+    :key,
+    :keyfile,
+    :password,
+    :cert_keys,
+    :keepalive,
+    :ip,
+    :ifaddr,
+    :nodelay
   ]
 
-  @tls_opts [
+  @tls_options [
     alpn_advertised_protocols: ["mqtt"],
     depth: 4,
     reuse_sessions: true,
@@ -19,18 +31,45 @@ defmodule MQTT.Transport.TLS do
     versions: @default_versions
   ]
 
+  @enforced_options [active: false, mode: :binary, packet: :raw] ++ @tls_options
+
   def close(socket) do
     wrap_error(:ssl.close(socket))
   end
 
-  def connect(host, port, opts) when is_binary(host) do
+  def connect(host, opts) when is_binary(host) do
+    connect({host, @default_port}, opts)
+  end
+
+  def connect({host, port}, opts) when is_binary(host) and is_integer(port) do
     host = String.to_charlist(host)
 
-    with {:ok, socket} <-
-           :ssl.connect(host, port, Keyword.merge(opts, @transport_opts ++ @tls_opts)) do
-      {:ok, socket}
+    hostname_or_ip_address =
+      case :inet.parse_address(host) do
+        {:ok, ip_address} -> ip_address
+        {:error, :einval} -> host
+      end
+
+    use_ipv6? = Keyword.get(opts, :inet6, false)
+
+    options =
+      opts
+      |> Keyword.take(@allowed_options)
+      |> Keyword.merge(@enforced_options)
+
+    if use_ipv6? do
+      case do_connect(hostname_or_ip_address, port, [:inet6 | options]) do
+        {:ok, socket} ->
+          {:ok, socket}
+
+        _error ->
+          # We fallback to IPv4 if IPv6 does not work. This assumes a hostname
+          # was provided rather than a IPv6 address as otherwise retrying is
+          # not going to help.
+          do_connect(hostname_or_ip_address, port, options)
+      end
     else
-      error -> wrap_error(error)
+      do_connect(hostname_or_ip_address, port, options)
     end
   end
 
@@ -50,6 +89,13 @@ defmodule MQTT.Transport.TLS do
     with :ok <- :ssl.send(socket, payload) do
       {:ok, socket}
     else
+      error -> wrap_error(error)
+    end
+  end
+
+  defp do_connect(host, port, options) do
+    case :ssl.connect(host, port, options) do
+      {:ok, socket} -> {:ok, socket}
       error -> wrap_error(error)
     end
   end

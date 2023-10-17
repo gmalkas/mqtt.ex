@@ -31,10 +31,21 @@ defmodule MQTT.ClientTest do
       assert :connected = conn.state
     end
 
+    test "connects to a MQTT server over IPv6" do
+      {:ok, conn, tracer_port} = connect(endpoint: "::1", transport_opts: [inet6: true])
+
+      assert :connecting = conn.state
+      assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connect, conn.client_id})
+      assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
+      assert {:ok, %Packet.Connack{} = packet, conn} = MQTT.Client.read_next_packet(conn)
+      assert :success = packet.reason_code
+      assert :connected = conn.state
+    end
+
     test "connects to a MQTT server over TLS" do
       {:ok, conn, tracer_port} =
         connect(
-          address: "localhost",
+          endpoint: "localhost",
           transport: MQTT.Transport.TLS,
           transport_opts: [cacerts: [], verify_fun: {&verify_cert/3, nil}]
         )
@@ -50,8 +61,7 @@ defmodule MQTT.ClientTest do
     test "connects to a MQTT server over websocket" do
       {:ok, conn, tracer_port} =
         connect(
-          address: "localhost",
-          port: 8866,
+          endpoint: {"localhost", 8866},
           transport: MQTT.Transport.Websocket,
           transport_opts: [path: "/mqtt"]
         )
@@ -499,11 +509,10 @@ defmodule MQTT.ClientTest do
   defp connect(options \\ []) do
     client_id = Keyword.get_lazy(options, :client_id, &generate_client_id/0)
     tracer? = Keyword.get(options, :tracer?, true)
-    address = Keyword.get(options, :address, @ip_address)
+    endpoint = Keyword.get(options, :endpoint, @ip_address)
 
     connect_options =
       Keyword.take(options, [
-        :port,
         :keep_alive,
         :user_name,
         :password,
@@ -514,12 +523,11 @@ defmodule MQTT.ClientTest do
 
     if tracer? do
       tracer_port = MQTT.Test.Tracer.start!(client_id)
-      {:ok, conn} = MQTT.Client.connect(address, client_id, connect_options)
+      {:ok, conn} = MQTT.Client.connect(endpoint, client_id, connect_options)
 
       {:ok, conn, tracer_port}
     else
-      {:ok, conn} = MQTT.Client.connect(address, client_id, connect_options)
-      {:ok, conn}
+      MQTT.Client.connect(endpoint, client_id, connect_options)
     end
   end
 

@@ -13,7 +13,11 @@ defmodule MQTT.Transport.Websocket do
     :ok
   end
 
-  def connect(host, port, opts) when is_binary(host) do
+  def connect(host, opts) when is_binary(host) do
+    connect({host, default_port(opts)}, opts)
+  end
+
+  def connect({host, port}, opts) when is_binary(host) and is_integer(port) do
     has_required_dependencies?() ||
       raise """
         mint_web_socket is required to use the Websocket transport
@@ -79,5 +83,13 @@ defmodule MQTT.Transport.Websocket do
 
   defp has_required_dependencies? do
     Code.ensure_loaded?(Mint.HTTP) && Code.ensure_loaded?(Mint.WebSocket)
+  end
+
+  defp default_port(opts) do
+    if Keyword.get(opts, :tls, false) do
+      443
+    else
+      80
+    end
   end
 end

@@ -11,9 +11,8 @@ defmodule MQTT.ClientConn do
     :connack_properties,
     :keep_alive,
     :last_packet_sent_at,
-    :host,
+    :endpoint,
     :next_topic_alias,
-    :port,
     :read_buffer,
     :session,
     :handle,
@@ -23,13 +22,12 @@ defmodule MQTT.ClientConn do
     :transport_opts
   ]
 
-  def connecting({transport, transport_opts}, host, port, handle, %Packet.Connect{} = packet) do
+  def connecting({transport, transport_opts}, endpoint, handle, %Packet.Connect{} = packet) do
     %__MODULE__{
       client_id: packet.payload.client_id,
       connect_packet: packet,
-      host: host,
+      endpoint: endpoint,
       keep_alive: packet.keep_alive,
-      port: port,
       next_topic_alias: @initial_topic_alias,
       read_buffer: "",
       session: Session.new(),

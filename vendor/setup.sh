@@ -10,6 +10,7 @@ echo "Changing configuration to allow anonymous and SSL..."
 mkdir -p etc/conf.d
 cat << EOF > etc/conf.d/mqttex.conf
 allow_anonymous = on
+listener.tcp.ipv6 = ::1:1883
 listener.ssl.name = 127.0.0.1:8883
 listener.ssl.certfile = ./etc/cert.pem
 listener.ssl.keyfile = ./etc/key.pem
