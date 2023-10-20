@@ -1,6 +1,8 @@
 defmodule MQTT.Client.Worker do
   use GenServer
 
+  require Logger
+
   alias MQTT.{Client, Packet}
   alias __MODULE__, as: State
 
@@ -64,9 +66,35 @@ defmodule MQTT.Client.Worker do
   end
 
   @impl true
+  def handle_cast({:publish, topic_name, payload, options}, state) do
+    case Client.publish(state.conn, topic_name, payload, options) do
+      {:ok, conn} ->
+        {:noreply, %State{state | conn: conn}}
+
+      {:error, _error} ->
+        {:noreply, state}
+    end
+  end
+
+  @impl true
+  def handle_cast({:subscribe, topic_filters}, state) do
+    case Client.subscribe(state.conn, topic_filters) do
+      {:ok, conn} ->
+        {:noreply, %State{state | conn: conn}}
+
+      {:error, _error} ->
+        {:noreply, state}
+    end
+  end
+
+  @impl true
   def handle_info(message, state) do
     case Client.data_received(state.conn, message) do
       {:ok, conn, packets} ->
+        Logger.debug(
+          "pid=#{inspect(self())}, event=received_packets, packets=#{inspect(packets)}"
+        )
+
         {:ok, conn} = Client.set_mode(conn, :active)
 
         next_state = handle_packets(state, packets)
@@ -82,24 +110,31 @@ defmodule MQTT.Client.Worker do
   end
 
   defp handle_packet(packet, state) do
-    case packet do
-      %Packet.Connack{} ->
-        case state.handler.handle_events([{:connected, packet}], state.handler_state) do
-          {:ok, next_handler_state} ->
-            %State{state | handler_state: next_handler_state}
-        end
+    event =
+      case packet do
+        %Packet.Connack{} ->
+          {:connected, packet}
 
-      %Packet.Suback{} ->
-        case state.handler.handle_events([{:subscription, packet}], state.handler_state) do
-          {:ok, next_handler_state} ->
-            %State{state | handler_state: next_handler_state}
-        end
+        %Packet.Suback{} ->
+          {:subscription, packet}
 
-      %Packet.Publish{} ->
-        case state.handler.handle_events([{:publish, packet}], state.handler_state) do
-          {:ok, next_handler_state} ->
-            %State{state | handler_state: next_handler_state}
-        end
+        %Packet.Publish{} ->
+          {:publish, packet}
+      end
+
+    {next_handler_state, actions} = dispatch_event(state.handler, state.handler_state, event)
+
+    dispatch_actions(actions)
+
+    %State{state | handler_state: next_handler_state}
+  end
+
+  defp dispatch_event(handler, handler_state, event) do
+    case handler.handle_events([event], handler_state) do
+      {:ok, next_handler_state, actions} ->
+        {next_handler_state, actions}
     end
   end
+
+  defp dispatch_actions(actions), do: Enum.each(actions, &GenServer.cast(self(), &1))
 end

@@ -1,12 +1,34 @@
 defmodule MockHandler do
-  def init(pid) do
-    {:ok, pid}
+  def init(args) do
+    {:ok, args}
   end
 
-  def handle_events(events, pid) do
-    Enum.each(events, &send(pid, &1))
+  def handle_events(events, state) do
+    {pid, event_actions} =
+      case state do
+        pid when is_pid(pid) ->
+          {pid, []}
 
-    {:ok, pid}
+        [pid, event_actions] ->
+          {pid, event_actions}
+      end
+
+    actions =
+      Enum.reduce(events, [], fn event, action_acc ->
+        send(pid, event)
+
+        Enum.reduce(event_actions, action_acc, fn event_action, acc ->
+          case {event, event_action} do
+            {{event_type, _packet}, {event_type, action}} ->
+              [action | acc]
+
+            _ ->
+              acc
+          end
+        end)
+      end)
+
+    {:ok, state, Enum.reverse(actions)}
   end
 end
 
@@ -79,7 +101,7 @@ defmodule MQTT.Client.WorkerTest do
     assert_receive {:connected, %Packet.Connack{}}
 
     assert :ok = MQTT.Client.Worker.subscribe(pid, [topic_filter])
-    assert_receive {:subscription, %Packet.Suback{}}, 250
+    assert_receive {:subscription, %Packet.Suback{}}
   end
 
   test "calls the event handler for publish events" do
@@ -97,9 +119,34 @@ defmodule MQTT.Client.WorkerTest do
     :ok = MQTT.Client.Worker.subscribe(pid, [topic_filter])
 
     assert :ok = MQTT.Client.Worker.publish(pid, topic_filter, payload)
-    assert_receive {:publish, %Packet.Publish{} = packet}, 1000
+    assert_receive {:publish, %Packet.Publish{} = packet}
 
     assert topic_filter == packet.topic_name
     assert payload == packet.payload.data
+  end
+
+  describe "handler actions" do
+    test "supports subscribing and publishing" do
+      topic_filter = "/my/topic"
+      payload = "Hello world!"
+
+      event_actions = [
+        {:connected, {:subscribe, [topic_filter]}},
+        {:subscription, {:publish, topic_filter, payload, []}}
+      ]
+
+      {:ok, _pid} =
+        MQTT.Client.Worker.start_link(
+          client_id: generate_client_id(),
+          endpoint: @ip_address,
+          handler: {MockHandler, [self(), event_actions]}
+        )
+
+      assert_receive {:connected, %Packet.Connack{}}
+      assert_receive {:publish, %Packet.Publish{} = packet}
+
+      assert topic_filter == packet.topic_name
+      assert payload == packet.payload.data
+    end
   end
 end

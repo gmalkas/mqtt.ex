@@ -140,6 +140,7 @@ defmodule MQTT.Client do
 
   def send_packet(%Conn{} = conn, packet) do
     with {:ok, handle} <- conn.transport.send(conn.handle, Packet.encode!(packet)) do
+      Logger.debug("event=packet_sent, packet=#{inspect(packet)}")
       {:ok, Conn.packet_sent(conn, handle, packet)}
     end
   end
