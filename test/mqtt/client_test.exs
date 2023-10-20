@@ -1,12 +1,12 @@
 defmodule MQTT.ClientTest do
   use ExUnit.Case, async: false
 
+  import MQTT.Test.Utils
+
   alias MQTT.{Packet, PacketBuilder, TransportError}
   alias MQTT.ClientSession, as: Session
   alias MQTT.ClientConn, as: Conn
 
-  @client_id_byte_size 12
-  @topic_byte_size 12
   @ip_address "127.0.0.1"
 
   setup_all do
@@ -539,25 +539,5 @@ defmodule MQTT.ClientTest do
     assert {:ok, %Packet.Connack{}, conn} = MQTT.Client.read_next_packet(conn)
 
     {:ok, conn, tracer_port}
-  end
-
-  defp generate_client_id do
-    @client_id_byte_size
-    |> :crypto.strong_rand_bytes()
-    |> Base.encode64()
-  end
-
-  defp random_topic do
-    @topic_byte_size
-    |> :crypto.strong_rand_bytes()
-    |> Base.encode16()
-  end
-
-  defp verify_cert(_cert, {:bad_cert, :selfsigned_peer}, state) do
-    {:valid, state}
-  end
-
-  defp verify_cert(_, {:extension, _}, state) do
-    {:unknown, state}
   end
 end

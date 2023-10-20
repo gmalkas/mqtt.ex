@@ -57,6 +57,14 @@ defmodule MQTT.Client do
     end
   end
 
+  def data_received(%Conn{} = conn, message) do
+    with {:ok, conn, packets} <- decode_data(conn, message),
+         {:ok, conn} <-
+           Conn.handle_packets_from_server(conn, packets) do
+      {:ok, conn, packets}
+    end
+  end
+
   def disconnect(%Conn{} = conn, reason_code \\ :normal_disconnection) do
     packet = PacketBuilder.Disconnect.new(reason_code)
 
@@ -133,6 +141,12 @@ defmodule MQTT.Client do
   def send_packet(%Conn{} = conn, packet) do
     with {:ok, handle} <- conn.transport.send(conn.handle, Packet.encode!(packet)) do
       {:ok, Conn.packet_sent(conn, handle, packet)}
+    end
+  end
+
+  def set_mode(%Conn{} = conn, mode) when mode in [:active, :passive] do
+    with {:ok, handle} <- conn.transport.set_mode(conn.handle, mode) do
+      {:ok, Conn.update_handle(conn, handle)}
     end
   end
 
@@ -219,6 +233,30 @@ defmodule MQTT.Client do
     |> case do
       %Conn{} = conn -> {:ok, packet, conn}
       error -> error
+    end
+  end
+
+  defp decode_data(conn, message) do
+    with {:ok, handle, data} <- conn.transport.data_received(conn.handle, message) do
+      buffer = conn.read_buffer <> data
+      decode_packets(Conn.update_buffer(conn, handle, buffer), buffer)
+    end
+  end
+
+  defp decode_packets(_conn, _buffer, _packets \\ [])
+
+  defp decode_packets(conn, <<>>, packets), do: {:ok, conn, Enum.reverse(packets)}
+
+  defp decode_packets(conn, data, packets) do
+    case PacketDecoder.decode(data) do
+      {:ok, packet, buffer} ->
+        decode_packets(Conn.update_buffer(conn, buffer), buffer, [packet | packets])
+
+      {:error, :incomplete_packet} ->
+        {:ok, conn, Enum.reverse(packets)}
+
+      other_error ->
+        other_error
     end
   end
 end

@@ -51,6 +51,12 @@ defmodule MQTT.Transport.TCP do
     end
   end
 
+  def data_received(socket, {:tcp, socket, data}) do
+    {:ok, socket, data}
+  end
+
+  def data_received(_, _), do: :unknown
+
   def recv(socket, byte_count, timeout) do
     with {:ok, packet} <- :gen_tcp.recv(socket, byte_count, timeout) do
       {:ok, socket, packet}
@@ -65,6 +71,20 @@ defmodule MQTT.Transport.TCP do
     )
 
     with :ok <- :gen_tcp.send(socket, payload) do
+      {:ok, socket}
+    else
+      error -> wrap_error(error)
+    end
+  end
+
+  def set_mode(socket, mode) do
+    active =
+      case mode do
+        :active -> :once
+        :passive -> false
+      end
+
+    with :ok <- :inet.setopts(socket, active: active) do
       {:ok, socket}
     else
       error -> wrap_error(error)

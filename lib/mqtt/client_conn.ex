@@ -51,8 +51,21 @@ defmodule MQTT.ClientConn do
     Map.fetch(conn.topic_aliases, topic)
   end
 
-  def handle_packet_from_server(%__MODULE__{} = conn, packet, buffer) do
+  def handle_packet_from_server(%__MODULE__{} = conn, packet) do
+    do_handle_packet_from_server(conn, packet)
+  end
+
+  def handle_packet_from_server(%__MODULE__{} = conn, packet, buffer) when is_binary(buffer) do
     do_handle_packet_from_server(%__MODULE__{conn | read_buffer: buffer}, packet)
+  end
+
+  def handle_packets_from_server(%__MODULE__{} = conn, packets) when is_list(packets) do
+    Enum.reduce_while(packets, {:ok, conn}, fn packet, {:ok, conn} ->
+      case do_handle_packet_from_server(conn, packet) do
+        {:ok, next_conn} -> {:cont, {:ok, next_conn}}
+        error -> {:halt, error}
+      end
+    end)
   end
 
   def next_packet_identifier(%__MODULE__{} = conn) do
@@ -117,6 +130,14 @@ defmodule MQTT.ClientConn do
   def should_ping?(%__MODULE__{} = conn) do
     is_nil(conn.last_packet_sent_at) ||
       monotonic_time() - conn.last_packet_sent_at > conn.keep_alive
+  end
+
+  def update_buffer(%__MODULE__{} = conn, buffer) when is_binary(buffer) do
+    %__MODULE__{conn | read_buffer: buffer}
+  end
+
+  def update_buffer(%__MODULE__{} = conn, handle, buffer) when is_binary(buffer) do
+    %__MODULE__{conn | read_buffer: buffer, handle: handle}
   end
 
   def update_handle(%__MODULE__{} = conn, handle) do
@@ -188,6 +209,13 @@ defmodule MQTT.ClientConn do
   defp monotonic_time, do: :erlang.monotonic_time(:millisecond)
 
   defp can_allocate_topic_alias?(conn) do
-    map_size(conn.topic_aliases) < conn.connack_properties.topic_alias_maximum
+    # [MQTT-3.1.4] Clients are allowed to send further MQTT Control Packets
+    # immediately after sending a CONNECT packet; Clients need not wait for a
+    # CONNACK packet to arrive from the Server.
+
+    # If we have not received a CONNACK message yet, we simply assume that topic
+    # aliases will be supported.
+    is_nil(conn.connack_properties) ||
+      map_size(conn.topic_aliases) < conn.connack_properties.topic_alias_maximum
   end
 end

@@ -47,6 +47,23 @@ defmodule MQTT.Transport.Websocket do
     end
   end
 
+  def data_received(handle, {:tcp, socket, data}) do
+    case Mint.HTTP.get_socket(handle.conn) do
+      ^socket ->
+        with {:ok, websocket, [{:binary, payload}]} <-
+               Mint.WebSocket.decode(handle.websocket, data) do
+          {:ok, %__MODULE__{handle | websocket: websocket}, payload}
+        else
+          error -> wrap_error(error)
+        end
+
+      _ ->
+        :unknown
+    end
+  end
+
+  def data_received(_, _), do: :unknown
+
   def recv(%__MODULE__{} = handle, byte_count, timeout) do
     %__MODULE__{ref: ref} = handle
 
@@ -68,9 +85,7 @@ defmodule MQTT.Transport.Websocket do
     end
   end
 
-  def setopts(%__MODULE__{} = handle, opts) do
-    mode = Keyword.get(opts, :mode, :active)
-
+  def set_mode(handle, mode) do
     {:ok, conn} = Mint.HTTP.set_mode(handle.conn, mode)
 
     {:ok, %__MODULE__{handle | conn: conn}}
