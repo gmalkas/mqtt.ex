@@ -4,6 +4,7 @@ defmodule MQTT.Client.Worker do
   require Logger
 
   alias MQTT.{Client, Packet}
+  alias MQTT.ClientConn, as: Conn
   alias __MODULE__, as: State
 
   defstruct [:conn, :handler, :handler_state]
@@ -88,6 +89,38 @@ defmodule MQTT.Client.Worker do
   end
 
   @impl true
+  def handle_info(:keep_alive, %State{conn: %Conn{state: :connected}} = state) do
+    # If Keep Alive is non-zero and in the absence of sending any other MQTT
+    # Control Packets, the Client MUST send a PINGREQ packet [MQTT-3.1.2-20].
+
+    case Client.ping(state.conn) do
+      {:ok, conn} ->
+        {:noreply, %State{state | conn: conn}}
+
+      {:error, error} ->
+        next_state = handle_error(state, error)
+        {:noreply, next_state}
+    end
+  end
+
+  @impl true
+  def handle_info(:keep_alive, state) do
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info(:ping_timeout, %State{conn: %Conn{state: :connected}} = state) do
+    next_state = handle_error(state, %MQTT.TransportError{reason: :timeout})
+
+    {:noreply, next_state}
+  end
+
+  @impl true
+  def handle_info(:ping_timeout, state) do
+    {:noreply, state}
+  end
+
+  @impl true
   def handle_info(message, state) do
     case Client.data_received(state.conn, message) do
       {:ok, conn, packets} ->
@@ -100,10 +133,23 @@ defmodule MQTT.Client.Worker do
         next_state = handle_packets(state, packets)
 
         {:noreply, %State{next_state | conn: conn}}
+
+      {:ok, :closed} ->
+        {:ok, conn} = Conn.disconnected(state.conn)
+
+        next_state = emit_event(state, {:disconnected, :transport_closed})
+
+        {:noreply, %State{next_state | conn: conn}}
     end
   end
 
   # HELPERS
+
+  defp handle_error(state, %MQTT.TransportError{} = error) do
+    {:ok, conn} = Client.disconnect!(state.conn)
+
+    emit_event(%State{state | conn: conn}, {:disconnected, error})
+  end
 
   defp handle_packets(state, packets) do
     Enum.reduce(packets, state, &handle_packet/2)
@@ -120,8 +166,15 @@ defmodule MQTT.Client.Worker do
 
         %Packet.Publish{} ->
           {:publish, packet}
+
+        %Packet.Pingresp{} ->
+          {:pong, packet}
       end
 
+    emit_event(state, event)
+  end
+
+  defp emit_event(state, event) do
     {next_handler_state, actions} = dispatch_event(state.handler, state.handler_state, event)
 
     dispatch_actions(actions)

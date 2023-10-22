@@ -149,4 +149,21 @@ defmodule MQTT.Client.WorkerTest do
       assert payload == packet.payload.data
     end
   end
+
+  test "uses keep alive to detect network issues" do
+    {:ok, server_pid} = MQTT.Test.FakeServer.start_link()
+    {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid)
+
+    {:ok, _pid} =
+      MQTT.Client.Worker.start_link(
+        client_id: generate_client_id(),
+        keep_alive: 1,
+        timeout: 100,
+        endpoint: {@ip_address, server_port},
+        handler: {MockHandler, self()}
+      )
+
+    assert_receive {:connected, %Packet.Connack{}}
+    assert_receive {:disconnected, %MQTT.TransportError{reason: :timeout}}, 1_200
+  end
 end

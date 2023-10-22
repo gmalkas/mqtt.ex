@@ -31,12 +31,14 @@ Here are the objectives, in order of importance:
     - [x] QoS 2
     - [x] Transport over WebSocket
     - [x] IPv6
+    - [x] Keep Alive
     - [ ] Event-driven API
     - [ ] Server redirection
-    - [ ] Keep-alive
     - [ ] Receive Maximum
     - [ ] Maximum Packet Size
+    - [ ] Request/Response
     - [ ] Send Disconnect with proper reason code on error
+    - [ ] Auto-reconnect with backoff
     - [ ] Packet encoding validation
     - [ ] UTF8 validation
     - [ ] Support for AUTH packet

@@ -4,16 +4,20 @@ defmodule MQTT.ClientConn do
 
   @initial_topic_alias 1
   @no_topic_alias 0
+  @default_timeout_ms 30_000
 
   defstruct [
     :client_id,
     :connect_packet,
     :connack_properties,
     :keep_alive,
+    :keep_alive_timer,
     :last_packet_sent_at,
     :endpoint,
     :next_topic_alias,
+    :ping_timer,
     :read_buffer,
+    :timeout,
     :session,
     :handle,
     :state,
@@ -22,16 +26,23 @@ defmodule MQTT.ClientConn do
     :transport_opts
   ]
 
-  def connecting({transport, transport_opts}, endpoint, handle, %Packet.Connect{} = packet) do
+  def connecting(
+        {transport, transport_opts},
+        endpoint,
+        handle,
+        %Packet.Connect{} = packet,
+        options \\ []
+      ) do
     %__MODULE__{
       client_id: packet.payload.client_id,
       connect_packet: packet,
       endpoint: endpoint,
+      handle: handle,
       keep_alive: packet.keep_alive,
       next_topic_alias: @initial_topic_alias,
       read_buffer: "",
+      timeout: Keyword.get(options, :timeout, @default_timeout_ms),
       session: Session.new(),
-      handle: handle,
       state: :connecting,
       topic_aliases: %{},
       transport: transport,
@@ -43,8 +54,12 @@ defmodule MQTT.ClientConn do
     %__MODULE__{conn | session: Session.new()}
   end
 
-  def disconnect(%__MODULE__{} = conn) do
-    {:ok, %__MODULE__{conn | state: :disconnected}}
+  def disconnected(%__MODULE__{} = conn) do
+    cancel_timer!(conn.keep_alive_timer)
+    cancel_timer!(conn.ping_timer)
+
+    {:ok,
+     %__MODULE__{conn | handle: nil, keep_alive_timer: nil, ping_timer: nil, state: :disconnected}}
   end
 
   def fetch_topic_alias(%__MODULE__{} = conn, topic) when is_binary(topic) do
@@ -66,6 +81,10 @@ defmodule MQTT.ClientConn do
         error -> {:halt, error}
       end
     end)
+  end
+
+  def has_keep_alive?(%__MODULE__{} = conn) do
+    !is_nil(conn.keep_alive) && conn.keep_alive > 0
   end
 
   def next_packet_identifier(%__MODULE__{} = conn) do
@@ -92,6 +111,11 @@ defmodule MQTT.ClientConn do
   end
 
   def packet_sent(%__MODULE__{} = conn, handle, packet) do
+    conn =
+      conn
+      |> reset_keep_alive_timer()
+      |> maybe_reset_ping_timer(packet)
+
     %__MODULE__{
       conn
       | handle: handle,
@@ -108,6 +132,21 @@ defmodule MQTT.ClientConn do
         topic_aliases: %{},
         next_topic_alias: @initial_topic_alias
     }
+  end
+
+  def reset_keep_alive_timer(%__MODULE__{} = conn) do
+    cancel_timer!(conn.keep_alive_timer)
+
+    timer_ref =
+      if has_keep_alive?(conn) do
+        {:ok, ref} = :timer.send_after(:timer.seconds(conn.keep_alive), self(), :keep_alive)
+
+        ref
+      else
+        nil
+      end
+
+    %__MODULE__{conn | keep_alive_timer: timer_ref}
   end
 
   def retain_available?(%__MODULE__{} = conn) do
@@ -152,13 +191,24 @@ defmodule MQTT.ClientConn do
         conn.client_id
       end
 
+    # If the Server returns a Server Keep Alive on the CONNACK packet, the
+    # Client MUST use that value instead of the value it sent as the Keep Alive
+    # [MQTT-3.1.2-21].
+    keep_alive =
+      if !is_nil(packet.properties.server_keep_alive) do
+        packet.properties.server_keep_alive
+      else
+        conn.keep_alive
+      end
+
     {:ok,
-     %__MODULE__{
+     reset_keep_alive_timer(%__MODULE__{
        conn
        | state: :connected,
          client_id: client_id,
-         connack_properties: packet.properties
-     }}
+         connack_properties: packet.properties,
+         keep_alive: keep_alive
+     })}
   end
 
   defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Publish{} = _packet) do
@@ -166,7 +216,9 @@ defmodule MQTT.ClientConn do
   end
 
   defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Pingresp{} = _packet) do
-    {:ok, conn}
+    cancel_timer!(conn.ping_timer)
+
+    {:ok, %__MODULE__{conn | ping_timer: nil}}
   end
 
   defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Suback{} = packet) do
@@ -209,13 +261,26 @@ defmodule MQTT.ClientConn do
   defp monotonic_time, do: :erlang.monotonic_time(:millisecond)
 
   defp can_allocate_topic_alias?(conn) do
-    # [MQTT-3.1.4] Clients are allowed to send further MQTT Control Packets
+    # Clients are allowed to send further MQTT Control Packets
     # immediately after sending a CONNECT packet; Clients need not wait for a
-    # CONNACK packet to arrive from the Server.
+    # CONNACK packet to arrive from the Server. [MQTT-3.1.4]
 
     # If we have not received a CONNACK message yet, we simply assume that topic
     # aliases will be supported.
     is_nil(conn.connack_properties) ||
       map_size(conn.topic_aliases) < conn.connack_properties.topic_alias_maximum
   end
+
+  defp maybe_reset_ping_timer(conn, %Packet.Pingreq{}) do
+    cancel_timer!(conn.ping_timer)
+
+    {:ok, timer_ref} = :timer.send_after(conn.timeout, self(), :ping_timeout)
+
+    %__MODULE__{conn | ping_timer: timer_ref}
+  end
+
+  defp maybe_reset_ping_timer(conn, _), do: conn
+
+  defp cancel_timer!(nil), do: :ok
+  defp cancel_timer!(ref), do: {:ok, :cancel} = :timer.cancel(ref)
 end

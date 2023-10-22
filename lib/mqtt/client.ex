@@ -11,6 +11,8 @@ defmodule MQTT.Client do
     transport = Keyword.get(options, :transport, Transport.TCP)
     transport_opts = Keyword.get(options, :transport_opts, [])
 
+    conn_options = Keyword.take(options, [:timeout])
+
     user_name = Keyword.get(options, :user_name)
     password = Keyword.get(options, :password)
     will_message = Keyword.get(options, :will_message)
@@ -51,7 +53,7 @@ defmodule MQTT.Client do
 
     with {:ok, handle} <- transport.connect(endpoint, transport_opts) do
       send_packet(
-        Conn.connecting({transport, transport_opts}, endpoint, handle, packet),
+        Conn.connecting({transport, transport_opts}, endpoint, handle, packet, conn_options),
         packet
       )
     end
@@ -70,13 +72,13 @@ defmodule MQTT.Client do
 
     with {:ok, conn} <- send_packet(conn, packet),
          :ok <- conn.transport.close(conn.handle) do
-      Conn.disconnect(conn)
+      Conn.disconnected(conn)
     end
   end
 
   def disconnect!(%Conn{} = conn) do
     with :ok <- conn.transport.close(conn.handle) do
-      Conn.disconnect(conn)
+      Conn.disconnected(conn)
     end
   end
 

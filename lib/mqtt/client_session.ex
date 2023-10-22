@@ -76,9 +76,9 @@ defmodule MQTT.ClientSession do
   end
 
   def handle_packet_from_server(%__MODULE__{} = session, %Packet.Pubrec{} = packet) do
-    # [MQTT-4.3.3]: The Packet Identifier becomes available for reuse once the
+    # The Packet Identifier becomes available for reuse once the
     # sender has received the PUBCOMP packet or a PUBREC with a Reason Code of
-    # 0x80 or greater.
+    # 0x80 or greater. [MQTT-4.3.3]
 
     if Packet.indicates_error?(packet) do
       free_packet_identifier(session, packet.packet_identifier)

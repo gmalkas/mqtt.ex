@@ -55,6 +55,10 @@ defmodule MQTT.Transport.TCP do
     {:ok, socket, data}
   end
 
+  def data_received(socket, {:tcp_closed, socket}) do
+    {:ok, :closed}
+  end
+
   def data_received(_, _), do: :unknown
 
   def recv(socket, byte_count, timeout) do

@@ -47,7 +47,7 @@ defmodule MQTT.Transport.Websocket do
     end
   end
 
-  def data_received(handle, {:tcp, socket, data}) do
+  def data_received(handle, {type, socket, data}) when type in [:tcp, :ssl] do
     case Mint.HTTP.get_socket(handle.conn) do
       ^socket ->
         with {:ok, websocket, [{:binary, payload}]} <-
@@ -56,6 +56,16 @@ defmodule MQTT.Transport.Websocket do
         else
           error -> wrap_error(error)
         end
+
+      _ ->
+        :unknown
+    end
+  end
+
+  def data_received(handle, {type, socket}) when type in [:tcp_closed, :ssl_closed] do
+    case Mint.HTTP.get_socket(handle.conn) do
+      ^socket ->
+        {:ok, :closed}
 
       _ ->
         :unknown
