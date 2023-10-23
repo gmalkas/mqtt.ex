@@ -7,7 +7,7 @@ defmodule MQTT.Client.Worker do
   alias MQTT.ClientConn, as: Conn
   alias __MODULE__, as: State
 
-  defstruct [:conn, :handler, :handler_state]
+  defstruct [:conn, :handler, :handler_state, :options]
 
   # API
 
@@ -33,15 +33,15 @@ defmodule MQTT.Client.Worker do
   @impl true
   def handle_continue(:connect, args) do
     endpoint = Keyword.get(args, :endpoint)
-    client_id = Keyword.get(args, :client_id)
 
     {handler_mod, handler_opts} = Keyword.get(args, :handler)
     {:ok, handler_state} = handler_mod.init(handler_opts)
 
-    {:ok, conn} = Client.connect(endpoint, client_id, args)
+    {:ok, conn} = Client.connect(endpoint, args)
     {:ok, conn} = Client.set_mode(conn, :active)
 
-    {:noreply, %State{conn: conn, handler: handler_mod, handler_state: handler_state}}
+    {:noreply,
+     %State{conn: conn, options: args, handler: handler_mod, handler_state: handler_state}}
   end
 
   @impl true
@@ -130,9 +130,9 @@ defmodule MQTT.Client.Worker do
 
         {:ok, conn} = Client.set_mode(conn, :active)
 
-        next_state = handle_packets(state, packets)
+        next_state = handle_packets(%State{state | conn: conn}, packets)
 
-        {:noreply, %State{next_state | conn: conn}}
+        {:noreply, next_state}
 
       {:ok, :closed} ->
         {:ok, conn} = Conn.disconnected(state.conn)
@@ -159,7 +159,11 @@ defmodule MQTT.Client.Worker do
     event =
       case packet do
         %Packet.Connack{} ->
-          {:connected, packet}
+          if packet.reason_code == :server_moved || packet.reason_code == :use_another_server do
+            {:redirected, packet}
+          else
+            {:connected, packet}
+          end
 
         %Packet.Suback{} ->
           {:subscription, packet}
@@ -171,8 +175,33 @@ defmodule MQTT.Client.Worker do
           {:pong, packet}
       end
 
-    emit_event(state, event)
+    state
+    |> process_event(event)
+    |> emit_event(event)
   end
+
+  defp process_event(state, {:redirected, packet}) do
+    if !is_nil(packet.properties.server_reference) do
+      {:ok, _conn} = Client.disconnect!(state.conn)
+
+      endpoint =
+        choose_endpoint(packet.properties.server_reference)
+
+      {handler_mod, handler_opts} = Keyword.get(state.options, :handler)
+      {:ok, handler_state} = handler_mod.init(handler_opts)
+
+      {:ok, conn} = Client.connect(endpoint, state.options)
+      {:ok, conn} = Client.set_mode(conn, :active)
+
+      %State{conn: conn, handler: handler_mod, handler_state: handler_state}
+    else
+      {:ok, conn} = Client.disconnect!(state.conn)
+
+      %State{state | conn: conn}
+    end
+  end
+
+  defp process_event(state, _), do: state
 
   defp emit_event(state, event) do
     {next_handler_state, actions} = dispatch_event(state.handler, state.handler_state, event)
@@ -190,4 +219,18 @@ defmodule MQTT.Client.Worker do
   end
 
   defp dispatch_actions(actions), do: Enum.each(actions, &GenServer.cast(self(), &1))
+
+  defp choose_endpoint(server_reference) when is_binary(server_reference) do
+    if String.starts_with?(server_reference, "[") do
+      case String.split(String.trim_leading(server_reference, "["), "]:") do
+        [host, port] -> {host, String.to_integer(port)}
+        [host] -> host
+      end
+    else
+      case String.split(server_reference, ":") do
+        [host, port] -> {host, String.to_integer(port)}
+        [host] -> host
+      end
+    end
+  end
 end

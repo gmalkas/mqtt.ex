@@ -32,8 +32,8 @@ Here are the objectives, in order of importance:
     - [x] Transport over WebSocket
     - [x] IPv6
     - [x] Keep Alive
+    - [x] Server redirection
     - [ ] Event-driven API
-    - [ ] Server redirection
     - [ ] Receive Maximum
     - [ ] Maximum Packet Size
     - [ ] Request/Response

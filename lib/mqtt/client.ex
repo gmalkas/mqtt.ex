@@ -7,12 +7,13 @@ defmodule MQTT.Client do
 
   @default_read_timeout_ms 500
 
-  def connect(endpoint, client_id, options \\ []) do
+  def connect(endpoint, options \\ []) do
     transport = Keyword.get(options, :transport, Transport.TCP)
     transport_opts = Keyword.get(options, :transport_opts, [])
 
     conn_options = Keyword.take(options, [:timeout])
 
+    client_id = Keyword.get(options, :client_id)
     user_name = Keyword.get(options, :user_name)
     password = Keyword.get(options, :password)
     will_message = Keyword.get(options, :will_message)

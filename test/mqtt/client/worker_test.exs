@@ -37,7 +37,7 @@ defmodule MQTT.Client.WorkerTest do
 
   import MQTT.Test.Utils
 
-  alias MQTT.Packet
+  alias MQTT.{Packet, PacketBuilder}
 
   @ip_address "127.0.0.1"
 
@@ -165,5 +165,31 @@ defmodule MQTT.Client.WorkerTest do
 
     assert_receive {:connected, %Packet.Connack{}}
     assert_receive {:disconnected, %MQTT.TransportError{reason: :timeout}}, 1_200
+  end
+
+  test "supports server redirection" do
+    {:ok, alt_server_pid} = MQTT.Test.FakeServer.start_link()
+    {:ok, alt_server_port} = MQTT.Test.FakeServer.accept_loop(alt_server_pid)
+
+    connack_packet =
+      PacketBuilder.Connack.new()
+      |> PacketBuilder.Connack.with_server_redirection(
+        :server_moved,
+        "localhost:#{alt_server_port}"
+      )
+
+    {:ok, server_pid} = MQTT.Test.FakeServer.start_link()
+    {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid, connack_packet)
+
+    {:ok, _pid} =
+      MQTT.Client.Worker.start_link(
+        client_id: generate_client_id(),
+        endpoint: {@ip_address, server_port},
+        handler: {MockHandler, self()}
+      )
+
+    assert_receive {:redirected, %Packet.Connack{}}
+    assert_receive {:connected, %Packet.Connack{}}
+    assert MQTT.Test.FakeServer.has_client?(alt_server_pid)
   end
 end

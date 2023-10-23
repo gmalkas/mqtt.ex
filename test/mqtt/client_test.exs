@@ -512,7 +512,8 @@ defmodule MQTT.ClientTest do
     endpoint = Keyword.get(options, :endpoint, @ip_address)
 
     connect_options =
-      Keyword.take(options, [
+      options
+      |> Keyword.take([
         :keep_alive,
         :user_name,
         :password,
@@ -520,14 +521,15 @@ defmodule MQTT.ClientTest do
         :transport,
         :transport_opts
       ])
+      |> Keyword.put(:client_id, client_id)
 
     if tracer? do
       tracer_port = MQTT.Test.Tracer.start!(client_id)
-      {:ok, conn} = MQTT.Client.connect(endpoint, client_id, connect_options)
+      {:ok, conn} = MQTT.Client.connect(endpoint, connect_options)
 
       {:ok, conn, tracer_port}
     else
-      MQTT.Client.connect(endpoint, client_id, connect_options)
+      MQTT.Client.connect(endpoint, connect_options)
     end
   end
 

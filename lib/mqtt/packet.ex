@@ -56,7 +56,60 @@ defmodule MQTT.Packet do
                     |> Map.new()
   @property_names Enum.map(@property_by_identifier, fn {_, {name, _}} -> name end)
 
-  @reason_code_name_by_packet_type_and_value %{
+  @reason_codes [
+    {0, :success, ~w(connack puback pubrec pubrel pubcomp unsuback auth)a},
+    {0, :normal_disconnection, ~w(disconnect)a},
+    {0, :granted_qos_0, ~w(suback)a},
+    {1, :granted_qos_1, ~w(suback)a},
+    {2, :granted_qos_2, ~w(suback)a},
+    {4, :disconnect_with_will_message, ~w(disconnect)a},
+    {16, :no_matching_subscribers, ~w(puback pubrec)a},
+    {17, :no_subscription_existed, ~w(unsuback)a},
+    {24, :continue_authentication, ~w(auth)a},
+    {25, :reauthenticate, ~w(auth)a},
+    {128, :unspecified_error, ~w(connack puback pubrec suback unsuback disconnect)a},
+    {129, :malformed_packet, ~w(connack disconnect)a},
+    {130, :protocol_error, ~w(connack disconnect)a},
+    {131, :implementation_specific_error, ~w(connack puback pubrec suback unsuback disconnect)a},
+    {132, :unsupported_protocol_version, ~w(connack)a},
+    {133, :client_identifier_not_valid, ~w(connack)a},
+    {134, :bad_user_name_or_password, ~w(connack)a},
+    {135, :not_authorized, ~w(connack puback pubrec suback unsuback disconnect)a},
+    {136, :server_unavailable, ~w(connack)a},
+    {137, :server_busy, ~w(connack disconnect)a},
+    {138, :banned, ~w(connack)a},
+    {139, :server_shutting_down, ~w(disconnect)a},
+    {140, :bad_authentication_method, ~w(connack disconnect)a},
+    {141, :keep_alive_timeout, ~w(disconnect)a},
+    {142, :session_taken_over, ~w(disconnect)a},
+    {143, :topic_filter_invalid, ~w(suback unsuback disconnect)a},
+    {144, :topic_name_invalid, ~w(connack puback pubrec disconnect)a},
+    {145, :packet_identifier_in_use, ~w(puback pubrec suback unsuback)a},
+    {146, :packet_identifier_not_found, ~w(pubrel pubcomp)a},
+    {147, :receive_maximum_exceeded, ~w(disconnect)a},
+    {148, :topic_alias_invalid, ~w(disconnect)a},
+    {149, :packet_too_large, ~w(connack disconnect)a},
+    {150, :message_rate_too_high, ~w(disconnect)a},
+    {151, :quota_exceeded, ~w(connack puback pubrec suback disconnect)a},
+    {152, :administrative_action, ~w(disconnect)a},
+    {153, :payload_format_invalid, ~w(connack puback pubrec disconnect)a},
+    {154, :retain_not_supported, ~w(connack disconnect)a},
+    {155, :qos_not_supported, ~w(connack disconnect)a},
+    {156, :use_another_server, ~w(connack disconnect)a},
+    {157, :server_moved, ~w(connack disconnect)a},
+    {158, :shared_subscriptions_not_supported, ~w(suback disconnect)a},
+    {159, :connection_rate_exceeded, ~w(connack disconnect)a},
+    {160, :maximum_connect_time, ~w(disconnect)a},
+    {161, :subscription_identifiers_not_supported, ~w(suback disconnect)a},
+    {162, :wildcard_subscriptions_not_supported, ~w(suback disconnect)a}
+  ]
+
+  @reason_code_name_by_packet_type_and_value @reason_codes
+                                             |> Enum.flat_map(fn {value, name, packet_types} ->
+                                               Enum.map(packet_types, &{{&1, value}, name})
+                                             end)
+                                             |> Map.new()
+  %{
     {:connack, 0} => :success,
     {:connack, 134} => :bad_user_name_or_password,
     {:puback, 0} => :success,
@@ -69,6 +122,7 @@ defmodule MQTT.Packet do
     {:suback, 0} => :granted_qos_0,
     {:unsuback, 0} => :success
   }
+
   @reason_code_by_name Enum.map(@reason_code_name_by_packet_type_and_value, fn {{_, value}, name} ->
                          {name, value}
                        end)
