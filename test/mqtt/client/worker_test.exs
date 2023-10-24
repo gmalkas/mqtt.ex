@@ -37,7 +37,7 @@ defmodule MQTT.Client.WorkerTest do
 
   import MQTT.Test.Utils
 
-  alias MQTT.{Packet, PacketBuilder}
+  alias MQTT.{Client.ReconnectStrategy, Packet, PacketBuilder}
 
   @ip_address "127.0.0.1"
 
@@ -191,5 +191,25 @@ defmodule MQTT.Client.WorkerTest do
     assert_receive {:redirected, %Packet.Connack{}}
     assert_receive {:connected, %Packet.Connack{}}
     assert MQTT.Test.FakeServer.has_client?(alt_server_pid)
+  end
+
+  test "automatically reconnects when losing connection" do
+    {:ok, server_pid} = MQTT.Test.FakeServer.start_link()
+    {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid)
+
+    {:ok, _pid} =
+      MQTT.Client.Worker.start_link(
+        client_id: generate_client_id(),
+        endpoint: {@ip_address, server_port},
+        handler: {MockHandler, self()},
+        reconnect_strategy: ReconnectStrategy.ConstantBackoff.new(0)
+      )
+
+    assert_receive {:connected, %Packet.Connack{}}
+    :ok = MQTT.Test.FakeServer.terminate(server_pid)
+
+    assert_receive {:disconnected, :transport_closed}
+
+    assert_receive {:connected, %Packet.Connack{}}
   end
 end

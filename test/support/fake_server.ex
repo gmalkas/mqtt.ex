@@ -22,8 +22,8 @@ defmodule MQTT.Test.FakeServer do
     GenServer.call(pid, :has_client?)
   end
 
-  def start_link do
-    GenServer.start_link(__MODULE__, [])
+  def start_link(args \\ []) do
+    GenServer.start_link(__MODULE__, args)
   end
 
   def terminate(pid) do
@@ -33,13 +33,13 @@ defmodule MQTT.Test.FakeServer do
   # CALLBACKS
 
   @impl true
-  def init(_args) do
-    {:ok, nil, {:continue, :listen}}
+  def init(args) do
+    {:ok, %State{port: Keyword.get(args, :port, 0)}, {:continue, :listen}}
   end
 
   @impl true
-  def handle_continue(:listen, nil) do
-    case do_listen() do
+  def handle_continue(:listen, %State{} = state) do
+    case do_listen(state.port) do
       {:ok, listen_socket} ->
         {:ok, port} = :inet.port(listen_socket)
 
@@ -62,6 +62,8 @@ defmodule MQTT.Test.FakeServer do
   @impl true
   def handle_call(:terminate, _from, %State{} = state) do
     close_socket(state.socket)
+
+    :ok = GenServer.cast(self(), {:accept_loop, state.connack_packet})
 
     {:reply, :ok, %State{state | socket: nil}}
   end
@@ -90,8 +92,8 @@ defmodule MQTT.Test.FakeServer do
 
   # HELPERS
 
-  defp do_listen do
-    :gen_tcp.listen(0, active: :once, mode: :binary)
+  defp do_listen(port) do
+    :gen_tcp.listen(port, active: :once, mode: :binary, reuseaddr: true)
   end
 
   defp close_socket(nil), do: :ok

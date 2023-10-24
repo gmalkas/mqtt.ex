@@ -3,7 +3,7 @@ defmodule MQTT.Client do
 
   alias MQTT.ClientConn, as: Conn
   alias MQTT.ClientSession, as: Session
-  alias MQTT.{Error, Packet, PacketBuilder, PacketDecoder, Transport}
+  alias MQTT.{Error, Packet, PacketBuilder, PacketDecoder, Transport, TransportError}
 
   @default_read_timeout_ms 500
 
@@ -11,7 +11,7 @@ defmodule MQTT.Client do
     transport = Keyword.get(options, :transport, Transport.TCP)
     transport_opts = Keyword.get(options, :transport_opts, [])
 
-    conn_options = Keyword.take(options, [:timeout])
+    conn_options = Keyword.take(options, [:reconnect_strategy, :timeout])
 
     client_id = Keyword.get(options, :client_id)
     user_name = Keyword.get(options, :user_name)
@@ -73,13 +73,13 @@ defmodule MQTT.Client do
 
     with {:ok, conn} <- send_packet(conn, packet),
          :ok <- conn.transport.close(conn.handle) do
-      Conn.disconnected(conn)
+      Conn.disconnected(conn, reconnect?: false)
     end
   end
 
-  def disconnect!(%Conn{} = conn) do
+  def disconnect!(%Conn{} = conn, should_reconnect? \\ false) do
     with :ok <- conn.transport.close(conn.handle) do
-      Conn.disconnected(conn)
+      Conn.disconnected(conn, should_reconnect?)
     end
   end
 
@@ -137,7 +137,17 @@ defmodule MQTT.Client do
 
         {:ok, _packet, conn} ->
           {:error, Error.protocol_error("unexpected packet received"), conn}
+
+        error ->
+          error
       end
+    end
+    |> case do
+      {:error, %TransportError{} = error} ->
+        {:error, error, Conn.reconnecting_failed(conn)}
+
+      other ->
+        other
     end
   end
 

@@ -33,12 +33,12 @@ Here are the objectives, in order of importance:
     - [x] IPv6
     - [x] Keep Alive
     - [x] Server redirection
+    - [ ] Auto-reconnect with configurable backoff
     - [ ] Event-driven API
     - [ ] Receive Maximum
     - [ ] Maximum Packet Size
     - [ ] Request/Response
     - [ ] Send Disconnect with proper reason code on error
-    - [ ] Auto-reconnect with backoff
     - [ ] Packet encoding validation
     - [ ] UTF8 validation
     - [ ] Support for AUTH packet

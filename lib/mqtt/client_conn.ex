@@ -1,26 +1,30 @@
 defmodule MQTT.ClientConn do
-  alias MQTT.{Error, Packet}
+  alias MQTT.{Client.ReconnectStrategy, Error, Packet}
   alias MQTT.ClientSession, as: Session
 
   @initial_topic_alias 1
   @no_topic_alias 0
   @default_timeout_ms 30_000
+  @default_reconnect_strategy ReconnectStrategy.ConstantBackoff.new(1)
 
   defstruct [
     :client_id,
     :connect_packet,
     :connack_properties,
+    :endpoint,
+    :handle,
     :keep_alive,
     :keep_alive_timer,
     :last_packet_sent_at,
-    :endpoint,
     :next_topic_alias,
     :ping_timer,
     :read_buffer,
-    :timeout,
+    :reconnect_retry_count,
+    :reconnect_strategy,
+    :reconnect_timer,
     :session,
-    :handle,
     :state,
+    :timeout,
     :topic_aliases,
     :transport,
     :transport_opts
@@ -41,6 +45,8 @@ defmodule MQTT.ClientConn do
       keep_alive: packet.keep_alive,
       next_topic_alias: @initial_topic_alias,
       read_buffer: "",
+      reconnect_retry_count: 0,
+      reconnect_strategy: Keyword.get(options, :reconnect_strategy, @default_reconnect_strategy),
       timeout: Keyword.get(options, :timeout, @default_timeout_ms),
       session: Session.new(),
       state: :connecting,
@@ -54,12 +60,26 @@ defmodule MQTT.ClientConn do
     %__MODULE__{conn | session: Session.new()}
   end
 
-  def disconnected(%__MODULE__{} = conn) do
+  def disconnected(%__MODULE__{} = conn, should_reconnect? \\ false) do
     cancel_timer!(conn.keep_alive_timer)
     cancel_timer!(conn.ping_timer)
 
+    reconnect_timer =
+      if should_reconnect? do
+        set_reconnect_timer(conn)
+      else
+        nil
+      end
+
     {:ok,
-     %__MODULE__{conn | handle: nil, keep_alive_timer: nil, ping_timer: nil, state: :disconnected}}
+     %__MODULE__{
+       conn
+       | handle: nil,
+         keep_alive_timer: nil,
+         ping_timer: nil,
+         reconnect_timer: reconnect_timer,
+         state: :disconnected
+     }}
   end
 
   def fetch_topic_alias(%__MODULE__{} = conn, topic) when is_binary(topic) do
@@ -131,6 +151,17 @@ defmodule MQTT.ClientConn do
         state: :reconnecting,
         topic_aliases: %{},
         next_topic_alias: @initial_topic_alias
+    }
+  end
+
+  def reconnecting_failed(%__MODULE__{state: state} = conn)
+      when state in [:reconnecting, :disconnected] do
+    %__MODULE__{
+      conn
+      | handle: nil,
+        reconnect_retry_count: conn.reconnect_retry_count + 1,
+        reconnect_timer: set_reconnect_timer(conn),
+        state: :disconnected
     }
   end
 
@@ -207,7 +238,8 @@ defmodule MQTT.ClientConn do
        | state: :connected,
          client_id: client_id,
          connack_properties: packet.properties,
-         keep_alive: keep_alive
+         keep_alive: keep_alive,
+         reconnect_retry_count: 0
      })}
   end
 
@@ -283,4 +315,16 @@ defmodule MQTT.ClientConn do
 
   defp cancel_timer!(nil), do: :ok
   defp cancel_timer!(ref), do: {:ok, :cancel} = :timer.cancel(ref)
+
+  defp set_reconnect_timer(conn) do
+    delay_s =
+      conn.reconnect_strategy.__struct__.delay(
+        conn.reconnect_strategy,
+        conn.reconnect_retry_count
+      )
+
+    {:ok, timer_ref} = :timer.send_after(:timer.seconds(delay_s), self(), :reconnect)
+
+    timer_ref
+  end
 end
