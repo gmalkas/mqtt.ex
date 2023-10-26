@@ -20,7 +20,7 @@ defmodule MQTT.PacketBuilder.Subscribe do
 
     %Subscribe{
       packet_identifier: packet_identifier,
-      properties: %{},
+      properties: %Subscribe.Properties{},
       payload: %Subscribe.Payload{topic_filters: topic_filters}
     }
   end

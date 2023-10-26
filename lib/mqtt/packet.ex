@@ -20,6 +20,7 @@ defmodule MQTT.Packet do
     15 => :auth
   }
 
+  # https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901027
   @property_by_identifier %{
     1 => {:payload_format_indicator, :byte},
     2 => {:message_expiry_interval, :four_byte_integer},
@@ -56,6 +57,7 @@ defmodule MQTT.Packet do
                     |> Map.new()
   @property_names Enum.map(@property_by_identifier, fn {_, {name, _}} -> name end)
 
+  # https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901031
   @reason_codes [
     {0, :success, ~w(connack puback pubrec pubrel pubcomp unsuback auth)a},
     {0, :normal_disconnection, ~w(disconnect)a},

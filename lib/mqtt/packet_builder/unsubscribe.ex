@@ -10,7 +10,7 @@ defmodule MQTT.PacketBuilder.Unsubscribe do
 
     %Unsubscribe{
       packet_identifier: packet_identifier,
-      properties: %{},
+      properties: %Unsubscribe.Properties{},
       payload: %Unsubscribe.Payload{topic_filters: topic_filters}
     }
   end

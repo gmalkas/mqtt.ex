@@ -12,7 +12,7 @@ defmodule MQTT.Packet.Connect do
 
     connect_flags = __MODULE__.Flags.encode!(packet.flags)
     keep_alive = PacketEncoder.encode_two_byte_integer(packet.keep_alive)
-    properties = PacketEncoder.encode_properties(packet.properties)
+    properties = __MODULE__.Properties.encode!(packet.properties)
 
     variable_header =
       protocol_name <> protocol_version <> connect_flags <> keep_alive <> properties
@@ -27,6 +27,20 @@ defmodule MQTT.Packet.Connect do
 
     fixed_header <> variable_header <> payload
   end
+end
+
+defmodule MQTT.Packet.Connect.Properties do
+  use MQTT.PacketProperties, properties: ~w(
+    session_expiry_interval
+    receive_maximum
+    maximum_packet_size
+    topic_alias_maximum
+    request_response_information
+    request_problem_information
+    user_property
+    authentication_method
+    authentication_data
+  )a
 end
 
 defmodule MQTT.Packet.Connect.Flags do
@@ -97,23 +111,13 @@ defmodule MQTT.Packet.Connect.Payload do
 end
 
 defmodule MQTT.Packet.Connect.Payload.WillProperties do
-  alias MQTT.PacketEncoder
-
-  defstruct [
-    :will_delay_interval,
-    :payload_format_indicator,
-    :message_expiry_interval,
-    :content_type,
-    :response_topic,
-    :correlation_data,
-    :user_properties
-  ]
-
-  def encode!(%__MODULE__{} = will_properties) do
-    # TODO: Perhaps discarding nil values should be done in `PacketEncoder.encode_properties/1`?
-    will_properties
-    |> Map.from_struct()
-    |> Enum.reject(fn {_, value} -> is_nil(value) end)
-    |> PacketEncoder.encode_properties()
-  end
+  use MQTT.PacketProperties, properties: ~w(
+    will_delay_interval
+    payload_format_indicator
+    message_expiry_interval
+    content_type
+    response_topic
+    correlation_data
+    user_property
+  )a
 end

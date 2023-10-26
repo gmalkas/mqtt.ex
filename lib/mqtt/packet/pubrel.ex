@@ -9,7 +9,8 @@ defmodule MQTT.Packet.Pubrel do
   def decode(data, remaining_length) do
     with {:ok, packet_identifier, rest} <- PacketDecoder.decode_packet_identifier(data),
          {:ok, reason_code, rest} <- decode_reason_code(rest, remaining_length),
-         {:ok, properties, _, rest} <- decode_properties(rest, remaining_length) do
+         {:ok, properties, _, rest} <- decode_properties(rest, remaining_length),
+         {:ok, properties} <- __MODULE__.Properties.from_decoder(properties) do
       {:ok,
        %__MODULE__{
          packet_identifier: packet_identifier,
@@ -23,7 +24,7 @@ defmodule MQTT.Packet.Pubrel do
     packet_identifier = PacketEncoder.encode_two_byte_integer(packet.packet_identifier)
 
     variable_header =
-      if skip_reason_code?(packet) do
+      if skip_reason_code_and_properties?(packet) do
         packet_identifier
       else
         reason_code = PacketEncoder.encode_reason_code(packet.reason_code)
@@ -44,32 +45,14 @@ defmodule MQTT.Packet.Pubrel do
   defp decode_reason_code(data, 2), do: {:ok, :success, data}
   defp decode_reason_code(data, _), do: PacketDecoder.decode_reason_code(:pubrel, data)
 
-  defp decode_properties(data, 2), do: {:ok, %{}, 0, data}
+  defp decode_properties(data, 2), do: {:ok, [], 0, data}
   defp decode_properties(data, _), do: PacketDecoder.decode_properties(data)
 
-  defp skip_reason_code?(packet) do
+  defp skip_reason_code_and_properties?(packet) do
     packet.reason_code == :success && __MODULE__.Properties.empty?(packet.properties)
   end
 end
 
 defmodule MQTT.Packet.Pubrel.Properties do
-  alias MQTT.PacketEncoder
-
-  @properties ~w(reason_string user_property)a
-
-  defstruct @properties
-
-  def empty?(%__MODULE__{} = properties) do
-    properties
-    |> Map.from_struct()
-    |> Enum.reject(fn {_, value} -> is_nil(value) end)
-    |> Enum.empty?()
-  end
-
-  def encode!(%__MODULE__{} = properties) do
-    properties
-    |> Map.from_struct()
-    |> Enum.reject(fn {_, value} -> is_nil(value) end)
-    |> PacketEncoder.encode_properties()
-  end
+  use MQTT.PacketProperties, properties: ~w(reason_string user_property)a
 end

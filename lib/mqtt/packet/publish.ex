@@ -13,6 +13,7 @@ defmodule MQTT.Packet.Publish do
          {:ok, topic_name, rest} <- decode_utf8_string(data),
          {:ok, packet_identifier, rest} <- decode_packet_identifier(rest, flags),
          {:ok, properties, properties_length, rest} <- decode_properties(rest),
+         {:ok, properties} <- __MODULE__.Properties.from_decoder(properties),
          {:ok, payload, rest} <-
            decode_payload(
              rest,
@@ -33,7 +34,7 @@ defmodule MQTT.Packet.Publish do
     flags = __MODULE__.Flags.encode!(packet.flags)
 
     topic_name = PacketEncoder.encode_utf8_string(packet.topic_name)
-    properties = __MODULE__.Properties.encode(packet.properties)
+    properties = __MODULE__.Properties.encode!(packet.properties)
 
     variable_header =
       if packet.flags.qos > 0 do
@@ -111,21 +112,10 @@ defmodule MQTT.Packet.Publish.Flags do
 end
 
 defmodule MQTT.Packet.Publish.Properties do
-  alias MQTT.PacketEncoder
-
-  @properties ~w(
+  use MQTT.PacketProperties, properties: ~w(
     payload_format_indicator message_expiry_interval content_type response_topic
     correlation_data topic_alias subscription_identifier user_property
   )a
-
-  defstruct @properties
-
-  def encode(%__MODULE__{} = properties) do
-    properties
-    |> Map.from_struct()
-    |> Enum.reject(fn {_, value} -> is_nil(value) end)
-    |> PacketEncoder.encode_properties()
-  end
 end
 
 defmodule MQTT.Packet.Publish.Payload do

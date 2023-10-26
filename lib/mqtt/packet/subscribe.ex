@@ -8,7 +8,7 @@ defmodule MQTT.Packet.Subscribe do
 
   def encode!(%__MODULE__{} = packet) do
     packet_identifier = PacketEncoder.encode_two_byte_integer(packet.packet_identifier)
-    properties = PacketEncoder.encode_properties(packet.properties)
+    properties = __MODULE__.Properties.encode!(packet.properties)
 
     variable_header = packet_identifier <> properties
 
@@ -22,6 +22,10 @@ defmodule MQTT.Packet.Subscribe do
 
     fixed_header <> variable_header <> payload
   end
+end
+
+defmodule MQTT.Packet.Subscribe.Properties do
+  use MQTT.PacketProperties, properties: ~w(subscription_identifier user_property)a
 end
 
 defmodule MQTT.Packet.Subscribe.Payload do

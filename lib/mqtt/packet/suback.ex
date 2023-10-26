@@ -8,6 +8,7 @@ defmodule MQTT.Packet.Suback do
   def decode(data, remaining_length) do
     with {:ok, packet_identifier, rest} <- decode_packet_identifier(data),
          {:ok, properties, properties_length, rest} <- decode_properties(rest),
+         {:ok, properties} <- __MODULE__.Properties.from_decoder(properties),
          {:ok, payload, rest} <-
            decode_payload(rest, payload_length(remaining_length, properties_length)) do
       {:ok,
@@ -24,6 +25,10 @@ defmodule MQTT.Packet.Suback do
   end
 
   defp decode_payload(data, payload_length), do: __MODULE__.Payload.decode(data, payload_length)
+end
+
+defmodule MQTT.Packet.Suback.Properties do
+  use MQTT.PacketProperties, properties: ~w(reason_string user_property)a
 end
 
 defmodule MQTT.Packet.Suback.Payload do
