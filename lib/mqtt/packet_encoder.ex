@@ -8,6 +8,7 @@ defmodule MQTT.PacketEncoder do
   @max_variable_byte_integer_value 268_435_455
 
   def encode(:byte, value), do: encode_byte(value)
+  def encode(:binary, value), do: encode_binary_data(value)
   def encode(:two_byte_integer, value), do: encode_two_byte_integer(value)
   def encode(:four_byte_integer, value), do: encode_four_byte_integer(value)
   def encode(:utf8_string, value), do: encode_utf8_string(value)

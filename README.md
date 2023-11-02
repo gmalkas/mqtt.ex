@@ -1,21 +1,49 @@
 # MQTT.ex
 
-## Introduction
+Client and Server implementations of the [MQTT protocol](https://mqtt.org/),
+in Elixir.
 
-This project is under active development and aims at providing a client and
-server Elixir implementations of the MQTT protocol.
+:warning: This project is under **active** development and APIs may change
+at any time.
+
+## Introduction
 
 Here are the objectives, in order of importance:
 - Spec-compliant
-  - Full support for MQTT 3.1, 3.1.1 and MQTT 5
+  - Full support for MQTT v3.1, v3.1.1 and v5
 - Easy-to-use:
     - Idiomatic Elixir
-    - Surprise-free: if you are familiar with the MQTT spec or have worked with MQTT clients/servers before, you should not be surprised by this library.
+    - Surprise-free: mirror domain language of specification
     - Support for both async and sync APIs
 - Error Handling: no crash, return meaningful errors
-- Performance
-- Introspection
 - Telemetry
+- Introspection
+- Performance
+
+## Installation
+
+## Usage: Client
+
+
+### Connecting to a server
+
+### Publishing messages
+
+### Receiving messages
+
+### Publishing with QoS 1
+
+### Publishing with QoS 2
+
+### Connecting over TLS
+
+### Connecting over Websockets
+
+### Enhanced Authentication
+
+## Contributing
+
+## License
 
 ## Roadmap
 
@@ -34,17 +62,17 @@ Here are the objectives, in order of importance:
     - [x] Keep Alive
     - [x] Server redirection
     - [x] Auto-reconnect with configurable backoff
+    - [x] Support for AUTH packet and enhanced authentication flow
     - [ ] Event-driven API
     - [ ] Receive Maximum
     - [ ] Maximum Packet Size
-    - [ ] Request/Response
     - [ ] Send Disconnect with proper reason code on error
     - [ ] Packet encoding validation
-    - [ ] UTF8 validation
-    - [ ] Support for AUTH packet
+    - [ ] UTF-8 validation
     - [ ] Support all reason codes
     - [ ] Support all properties
     - [ ] Add support for MQTT v3.1.1
     - [ ] Add support for MQTT v3.1
     - [ ] Transport over Unix sockets
+    - [ ] Default CA store for TLS transport
     - [ ] Secure default ciphers for TLS transport

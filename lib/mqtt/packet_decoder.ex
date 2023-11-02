@@ -46,6 +46,7 @@ defmodule MQTT.PacketDecoder do
   defp decode_header_flags(:publish, <<dup::1, qos::2, retain::1>>),
     do: {:ok, %{dup: dup, qos: qos, retain: retain}}
 
+  defp decode_header_flags(:auth, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
   defp decode_header_flags(:puback, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
   defp decode_header_flags(:pubrec, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
   defp decode_header_flags(:pubrel, <<0::1, 0::1, 1::1, 0::1>>), do: {:ok, %{}}
@@ -57,13 +58,16 @@ defmodule MQTT.PacketDecoder do
   defp decode_header_flags(:pingreq, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
   defp decode_header_flags(:pingresp, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
   defp decode_header_flags(:disconnect, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
-  defp decode_header_flags(:auth, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
 
   defp decode_header_flags(_type, _flags),
     do: {:error, Error.malformed_packet("unexpected flags")}
 
   defp decode_remaining_length(data) do
     decode_variable_byte_integer(data)
+  end
+
+  defp decode_packet(:auth, _flags, remaining_length, data) do
+    Packet.Auth.decode(data, remaining_length)
   end
 
   defp decode_packet(:connack, _flags, _, data) do
@@ -126,7 +130,7 @@ defmodule MQTT.PacketDecoder do
   defp decode_property(data) do
     with {:ok, identifier, rest} <- decode_variable_byte_integer(data),
          {:ok, name, type, rest} <- property_name_and_type(identifier, rest),
-         {:ok, value, rest} <- decode_property(type, rest) do
+         {:ok, value, rest} <- decode_property_value(type, rest) do
       {:ok, name, value, rest}
     end
   end
@@ -138,43 +142,8 @@ defmodule MQTT.PacketDecoder do
     end
   end
 
-  defp decode_property(:utf8_string, data), do: decode_utf8_string(data)
-
-  defp decode_property(:session_expiry_interval, data) do
-    decode_four_byte_integer(data)
-  end
-
-  defp decode_property(:authentication_method, data) do
-    decode_four_byte_integer(data)
-  end
-
-  defp decode_property(:authentication_data, data) do
-    decode_binary_data(data)
-  end
-
-  defp decode_property(:request_problem_information, data) do
-    decode_byte(data)
-  end
-
-  defp decode_property(:request_response_information, data) do
-    decode_byte(data)
-  end
-
-  defp decode_property(:receive_maximum, data) do
-    decode_two_byte_integer(data)
-  end
-
-  defp decode_property(:topic_alias_maximum, data) do
-    decode_two_byte_integer(data)
-  end
-
-  defp decode_property(:user_property, data) do
-    decode_utf8_string_pair(data)
-  end
-
-  defp decode_property(:maximum_packet_size, data) do
-    decode_four_byte_integer(data)
-  end
+  defp decode_property_value(:binary, data), do: decode_binary_data(data)
+  defp decode_property_value(:utf8_string, data), do: decode_utf8_string(data)
 
   def decode_byte(<<value::8>> <> rest) do
     {:ok, value, rest}

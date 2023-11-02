@@ -28,6 +28,21 @@ defmodule MQTT.PacketBuilder.Connect do
     }
   end
 
+  def with_enhanced_authentication(
+        %Connect{} = packet,
+        authentication_method,
+        authentication_data \\ nil
+      ) do
+    %Connect{
+      packet
+      | properties: %Connect.Properties{
+          packet.properties
+          | authentication_method: authentication_method,
+            authentication_data: authentication_data
+        }
+    }
+  end
+
   def with_password(%Connect{} = packet, password) when is_binary(password) do
     %Connect{
       packet

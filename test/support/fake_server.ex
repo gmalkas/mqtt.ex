@@ -6,14 +6,14 @@ defmodule MQTT.Test.FakeServer do
   alias __MODULE__, as: State
   alias MQTT.{Packet, PacketBuilder}
 
-  defstruct [:listen_socket, :port, :socket, :connack_packet]
+  defstruct [:listen_socket, :port, :socket, :packets, :reply_queue]
 
   # API
 
-  def accept_loop(pid, connack_packet \\ default_connack_packet()) do
+  def accept_loop(pid, packets \\ default_packets()) when is_list(packets) do
     {:ok, port} = GenServer.call(pid, :port)
 
-    :ok = GenServer.cast(pid, {:accept_loop, connack_packet})
+    :ok = GenServer.cast(pid, {:accept_loop, packets})
 
     {:ok, port}
   end
@@ -63,26 +63,35 @@ defmodule MQTT.Test.FakeServer do
   def handle_call(:terminate, _from, %State{} = state) do
     close_socket(state.socket)
 
-    :ok = GenServer.cast(self(), {:accept_loop, state.connack_packet})
+    :ok = GenServer.cast(self(), {:accept_loop, state.packets})
 
     {:reply, :ok, %State{state | socket: nil}}
   end
 
   @impl true
-  def handle_cast({:accept_loop, connack_packet}, %State{} = state) do
+  def handle_cast({:accept_loop, packets}, %State{} = state) do
     case :gen_tcp.accept(state.listen_socket) do
       {:ok, socket} ->
-        {:noreply, %State{state | connack_packet: connack_packet, socket: socket}}
+        {:noreply, %State{state | packets: packets, reply_queue: packets, socket: socket}}
     end
   end
 
   @impl true
-  def handle_info({:tcp, socket, data}, %State{socket: socket} = state) do
+  def handle_info({:tcp, socket, _data}, %State{socket: socket} = state) do
     :inet.setopts(socket, active: :once)
 
-    handle_data(socket, state.connack_packet, data)
+    next_state =
+      case state.reply_queue do
+        [packet | packets] ->
+          send_reply(socket, packet)
 
-    {:noreply, state}
+          %State{state | reply_queue: packets}
+
+        [] ->
+          state
+      end
+
+    {:noreply, next_state}
   end
 
   @impl true
@@ -99,11 +108,9 @@ defmodule MQTT.Test.FakeServer do
   defp close_socket(nil), do: :ok
   defp close_socket(socket), do: :gen_tcp.close(socket)
 
-  defp handle_data(socket, response, _data) do
-    packet = Packet.Connack.encode!(response)
-
-    :ok = :gen_tcp.send(socket, packet)
+  defp send_reply(socket, packet) do
+    :ok = :gen_tcp.send(socket, Packet.encode!(packet))
   end
 
-  defp default_connack_packet, do: PacketBuilder.Connack.new()
+  defp default_packets, do: [PacketBuilder.Connack.new()]
 end

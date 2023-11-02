@@ -133,13 +133,18 @@ defmodule MQTT.Packet do
 
   def encode!(%packet_module{} = packet)
       when packet_module in [
+             __MODULE__.Auth,
+             __MODULE__.Connack,
              __MODULE__.Connect,
+             __MODULE__.Pubcomp,
              __MODULE__.Publish,
+             __MODULE__.Pubrec,
              __MODULE__.Pubrel,
              __MODULE__.Subscribe,
              __MODULE__.Unsubscribe,
              __MODULE__.Disconnect,
-             __MODULE__.Pingreq
+             __MODULE__.Pingreq,
+             __MODULE__.Pingresp
            ] do
     packet_module.encode!(packet)
   end

@@ -9,6 +9,21 @@ defmodule MQTT.PacketBuilder.Connack do
     }
   end
 
+  def with_enhanced_authentication(
+        %Connack{} = packet,
+        authentication_method,
+        authentication_data \\ nil
+      ) do
+    %Connack{
+      packet
+      | properties: %Connack.Properties{
+          packet.properties
+          | authentication_method: authentication_method,
+            authentication_data: authentication_data
+        }
+    }
+  end
+
   def with_server_redirection(%Connack{} = packet, reason_code, server_reference \\ nil)
       when reason_code in [:server_moved, :use_another_server] do
     %Connack{

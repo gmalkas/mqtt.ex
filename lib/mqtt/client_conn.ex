@@ -214,7 +214,16 @@ defmodule MQTT.ClientConn do
     %__MODULE__{conn | handle: handle}
   end
 
+  defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Auth{} = _packet) do
+    {:ok, conn}
+  end
+
   defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Connack{} = packet) do
+    # If the Client connects using a zero length Client Identifier, the Server
+    # MUST respond with a CONNACK containing an Assigned Client Identifier. The
+    # Assigned Client Identifier MUST be a new Client Identifier not used by
+    # any other Session currently in the Server [MQTT-3.2.2-16].
+
     client_id =
       if !is_nil(packet.properties.assigned_client_identifier) do
         packet.properties.assigned_client_identifier

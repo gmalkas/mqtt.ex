@@ -3,9 +3,15 @@ defmodule MQTT.Client do
 
   alias MQTT.ClientConn, as: Conn
   alias MQTT.ClientSession, as: Session
-  alias MQTT.{Error, Packet, PacketBuilder, PacketDecoder, Transport, TransportError}
+  alias MQTT.{Packet, PacketBuilder, PacketDecoder, Transport, TransportError}
 
   @default_read_timeout_ms 500
+
+  def auth(%Conn{} = conn, reason_code, authentication_method, authentication_data \\ nil) do
+    packet = PacketBuilder.Auth.new(reason_code, authentication_method, authentication_data)
+
+    send_packet(conn, packet)
+  end
 
   def connect(endpoint, options \\ []) do
     transport = Keyword.get(options, :transport, Transport.TCP)
@@ -16,6 +22,7 @@ defmodule MQTT.Client do
     client_id = Keyword.get(options, :client_id)
     user_name = Keyword.get(options, :user_name)
     password = Keyword.get(options, :password)
+    enhanced_authentication = Keyword.get(options, :enhanced_authentication)
     will_message = Keyword.get(options, :will_message)
 
     packet_options =
@@ -48,6 +55,19 @@ defmodule MQTT.Client do
 
         {topic, payload, options} ->
           PacketBuilder.Connect.with_will_message(packet, topic, payload, options)
+      end
+
+    packet =
+      case enhanced_authentication do
+        nil ->
+          packet
+
+        {authentication_method, authentication_data} ->
+          PacketBuilder.Connect.with_enhanced_authentication(
+            packet,
+            authentication_method,
+            authentication_data
+          )
       end
 
     Logger.info("endpoint=#{inspect(endpoint)}, action=connect")

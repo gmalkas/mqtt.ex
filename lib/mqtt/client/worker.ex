@@ -62,7 +62,20 @@ defmodule MQTT.Client.Worker do
         {:reply, :ok, %State{state | conn: conn}}
 
       {:error, error} ->
+        # TODO: Handle errors
         {:reply, {:error, error}, state}
+    end
+  end
+
+  @impl true
+  def handle_cast({:auth, reason_code, authentication_method, authentication_data}, state) do
+    case Client.auth(state.conn, reason_code, authentication_method, authentication_data) do
+      {:ok, conn} ->
+        {:noreply, %State{state | conn: conn}}
+
+      {:error, _error} ->
+        # TODO: Handle errors
+        {:noreply, state}
     end
   end
 
@@ -177,8 +190,12 @@ defmodule MQTT.Client.Worker do
   end
 
   defp handle_packet(packet, state) do
+    # TODO: Handle DISCONNECT, PUBACK, PUBREC, PUBCOMP, UNSUBACK
     event =
       case packet do
+        %Packet.Auth{} ->
+          {:auth, packet}
+
         %Packet.Connack{} ->
           if packet.reason_code == :server_moved || packet.reason_code == :use_another_server do
             {:redirected, packet}

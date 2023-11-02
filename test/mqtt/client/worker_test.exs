@@ -179,7 +179,7 @@ defmodule MQTT.Client.WorkerTest do
       )
 
     {:ok, server_pid} = MQTT.Test.FakeServer.start_link()
-    {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid, connack_packet)
+    {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid, [connack_packet])
 
     {:ok, _pid} =
       MQTT.Client.Worker.start_link(
@@ -211,5 +211,38 @@ defmodule MQTT.Client.WorkerTest do
     assert_receive {:disconnected, :transport_closed}
 
     assert_receive {:connected, %Packet.Connack{}}
+  end
+
+  test "supports enhanced authentication flow" do
+    authentication_method = "SCRAM-SHA-1"
+
+    fake_packets = [
+      PacketBuilder.Auth.new(:continue_authentication, authentication_method, "step2"),
+      PacketBuilder.Connack.new()
+      |> PacketBuilder.Connack.with_enhanced_authentication(authentication_method, "step4")
+    ]
+
+    {:ok, server_pid} = MQTT.Test.FakeServer.start_link()
+    {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid, fake_packets)
+
+    event_actions = [
+      {:auth, {:auth, :continue_authentication, authentication_method, "step3"}}
+    ]
+
+    {:ok, _pid} =
+      MQTT.Client.Worker.start_link(
+        client_id: generate_client_id(),
+        endpoint: {@ip_address, server_port},
+        enhanced_authentication: {authentication_method, "myusername"},
+        handler: {MockHandler, [self(), event_actions]}
+      )
+
+    assert_receive {:auth, %Packet.Auth{} = auth_packet}
+    assert authentication_method == auth_packet.properties.authentication_method
+    assert "step2" == auth_packet.properties.authentication_data
+
+    assert_receive {:connected, %Packet.Connack{} = connack_packet}
+    assert authentication_method == connack_packet.properties.authentication_method
+    assert "step4" == connack_packet.properties.authentication_data
   end
 end
