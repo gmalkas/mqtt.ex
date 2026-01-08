@@ -18,6 +18,10 @@ defmodule MQTT.Test.Utils do
     {:valid, state}
   end
 
+  def verify_cert(_cert, {:bad_cert, :cert_expired}, state) do
+    {:valid, state}
+  end
+
   def verify_cert(_, {:extension, _}, state) do
     {:unknown, state}
   end
