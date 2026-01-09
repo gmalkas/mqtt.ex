@@ -17,7 +17,7 @@ defmodule MQTT.Client do
     transport = Keyword.get(options, :transport, Transport.TCP)
     transport_opts = Keyword.get(options, :transport_opts, [])
 
-    conn_options = Keyword.take(options, [:reconnect_strategy, :timeout])
+    conn_options = Keyword.take(options, [:connect_timeout, :reconnect_strategy, :timeout])
 
     client_id = Keyword.get(options, :client_id)
     user_name = Keyword.get(options, :user_name)

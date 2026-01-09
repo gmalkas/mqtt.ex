@@ -10,6 +10,7 @@ defmodule MQTT.ClientConn do
   defstruct [
     :client_id,
     :connect_packet,
+    :connect_timer,
     :connack_properties,
     :endpoint,
     :handle,
@@ -40,6 +41,7 @@ defmodule MQTT.ClientConn do
     %__MODULE__{
       client_id: packet.payload.client_id,
       connect_packet: packet,
+      connect_timer: set_connect_timer(Keyword.get(options, :connect_timeout, :infinity)),
       endpoint: endpoint,
       handle: handle,
       keep_alive: packet.keep_alive,
@@ -61,6 +63,7 @@ defmodule MQTT.ClientConn do
   end
 
   def disconnected(%__MODULE__{} = conn, should_reconnect? \\ false) do
+    cancel_timer!(conn.connect_timer)
     cancel_timer!(conn.keep_alive_timer)
     cancel_timer!(conn.ping_timer)
 
@@ -241,10 +244,13 @@ defmodule MQTT.ClientConn do
         conn.keep_alive
       end
 
+    cancel_timer!(conn.connect_timer)
+
     {:ok,
      reset_keep_alive_timer(%__MODULE__{
        conn
-       | state: :connected,
+       | connect_timer: nil,
+         state: :connected,
          client_id: client_id,
          connack_properties: packet.properties,
          keep_alive: keep_alive,
@@ -324,6 +330,14 @@ defmodule MQTT.ClientConn do
 
   defp cancel_timer!(nil), do: :ok
   defp cancel_timer!(ref), do: {:ok, :cancel} = :timer.cancel(ref)
+
+  defp set_connect_timer(:infinity), do: nil
+
+  defp set_connect_timer(timeout) do
+    {:ok, timer_ref} = :timer.send_after(timeout, self(), :connect_timeout)
+
+    timer_ref
+  end
 
   defp set_reconnect_timer(conn) do
     delay_s =

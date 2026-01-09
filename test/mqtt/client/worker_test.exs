@@ -245,4 +245,19 @@ defmodule MQTT.Client.WorkerTest do
     assert authentication_method == connack_packet.properties.authentication_method
     assert "step4" == connack_packet.properties.authentication_data
   end
+
+  test "supports a connection timeout" do
+    {:ok, server_pid} = MQTT.Test.FakeServer.start_link()
+    {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid, [])
+
+    {:ok, _pid} =
+      MQTT.Client.Worker.start_link(
+        client_id: generate_client_id(),
+        endpoint: {@ip_address, server_port},
+        handler: {MockHandler, self()},
+        connect_timeout: 1
+      )
+
+    assert_receive {:error, %MQTT.TransportError{reason: :connect_timeout}}, 50
+  end
 end

@@ -97,8 +97,35 @@ defmodule MQTT.Client.Worker do
         {:noreply, %State{state | conn: conn}}
 
       {:error, _error} ->
+        # TODO: Handle errors
         {:noreply, state}
     end
+  end
+
+  @impl true
+  def handle_info(:connect_timeout, %State{conn: %Conn{state: :connecting}} = state) do
+    # The server has not replied with CONNACK in time. Perhaps it is not a MQTT
+    # server, the server application is too slow, or due to poor network
+    # quality.
+    #
+    # We choose to defer to the user rather than retrying automatically. In some
+    # cases, retrying with the same timeout will never succeed. The user should
+    # terminate this worker instance and create another one.
+
+    {:ok, conn} = Client.disconnect!(state.conn, false)
+
+    next_state =
+      emit_event(
+        %State{state | conn: conn},
+        {:error, %MQTT.TransportError{reason: :connect_timeout}}
+      )
+
+    {:noreply, next_state}
+  end
+
+  @impl true
+  def handle_info(:connect_timeout, state) do
+    {:noreply, state}
   end
 
   @impl true
