@@ -152,6 +152,10 @@ defmodule MQTT.ClientConn do
       conn
       | handle: handle,
         state: :reconnecting,
+        # Topic Alias mappings exist only within a Network Connection and last only
+        # for the lifetime of that Network Connection. A receiver MUST NOT carry
+        # forward any Topic Alias mappings from one Network Connection to another
+        # [MQTT-3.3.2-7].
         topic_aliases: %{},
         next_topic_alias: @initial_topic_alias
     }
