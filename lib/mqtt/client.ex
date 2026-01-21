@@ -88,8 +88,23 @@ defmodule MQTT.Client do
     end
   end
 
-  def disconnect(%Conn{} = conn, reason_code \\ :normal_disconnection) do
+  def disconnect(%Conn{} = conn, reason_code \\ :normal_disconnection, reason_string \\ nil) do
+    # The CONNACK and DISCONNECT packets allow a Reason Code of 0x80 or greater
+    # to indicate that the Network Connection will be closed. If a Reason Code
+    # of 0x80 or greater is specified, then the Network Connection MUST be
+    # closed whether or not the CONNACK or DISCONNECT is sent [MQTT-4.13.2-1]
+
+    # We close the socket regardless of the reason code as there isn't a reason
+    # to keep the socket open after sending DISCONNECT.
+
     packet = PacketBuilder.Disconnect.new(reason_code)
+
+    packet =
+      if !is_nil(reason_string) do
+        PacketBuilder.Disconnect.with_reason_string(packet, reason_string)
+      else
+        packet
+      end
 
     with {:ok, conn} <- send_packet(conn, packet),
          :ok <- conn.transport.close(conn.handle) do
