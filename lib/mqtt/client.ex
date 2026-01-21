@@ -81,10 +81,17 @@ defmodule MQTT.Client do
   end
 
   def data_received(%Conn{} = conn, message) do
-    with {:ok, conn, packets} <- decode_data(conn, message),
-         {:ok, conn} <-
-           Conn.handle_packets_from_server(conn, packets) do
-      {:ok, conn, packets}
+    case decode_data(conn, message) do
+      {:ok, conn, packets} ->
+        with {:ok, conn} <- Conn.handle_packets_from_server(conn, packets),
+             {:ok, conn} <- maybe_republish_unacknowledged_messages(conn, packets) do
+          {:ok, conn, packets}
+        end
+
+      {:ok, :transport_closed} ->
+        {:ok, conn} = Conn.disconnected(conn, true)
+
+        {:ok, conn, :closed}
     end
   end
 
@@ -150,7 +157,8 @@ defmodule MQTT.Client do
   def read_next_packet(%Conn{} = conn) do
     with {:ok, handle, packet, buffer} <- do_read_next_packet(conn, conn.read_buffer),
          {:ok, conn} <-
-           Conn.handle_packet_from_server(Conn.update_handle(conn, handle), packet, buffer) do
+           Conn.handle_packet_from_server(Conn.update_handle(conn, handle), packet, buffer),
+         {:ok, conn} <- maybe_republish_unacknowledged_messages(conn, [packet]) do
       {:ok, packet, conn}
     end
   end
@@ -160,22 +168,8 @@ defmodule MQTT.Client do
 
     Logger.info("endpoint=#{inspect(conn.endpoint)}, action=reconnect")
 
-    with {:ok, handle} <- conn.transport.connect(conn.endpoint, conn.transport_opts),
-         {:ok, conn} <- send_packet(Conn.reconnecting(conn, handle), connect_packet) do
-      case read_next_packet(conn) do
-        {:ok, %Packet.Connack{} = packet, conn} ->
-          if packet.flags.session_present? do
-            republish_unacknowledged_messages(conn, packet)
-          else
-            {:ok, packet, Conn.destroy_session(conn)}
-          end
-
-        {:ok, _packet, conn} ->
-          {:error, Error.protocol_error("unexpected packet received"), conn}
-
-        error ->
-          error
-      end
+    with {:ok, handle} <- conn.transport.connect(conn.endpoint, conn.transport_opts) do
+      send_packet(Conn.reconnecting(conn, handle), connect_packet)
     end
     |> case do
       {:error, %TransportError{} = error} ->
@@ -257,7 +251,26 @@ defmodule MQTT.Client do
     end
   end
 
-  defp republish_unacknowledged_messages(conn, packet) do
+  defp maybe_republish_unacknowledged_messages(conn, packets) do
+    packets
+    |> Enum.find(fn
+      %Packet.Connack{} -> true
+      _ -> false
+    end)
+    |> case do
+      nil ->
+        {:ok, conn}
+
+      packet ->
+        if packet.flags.session_present? do
+          republish_unacknowledged_messages(conn)
+        else
+          {:ok, Conn.destroy_session(conn)}
+        end
+    end
+  end
+
+  defp republish_unacknowledged_messages(conn) do
     # When a Client reconnects with Clean Start set to 0 and a session is
     # present, both the Client and Server MUST resend any unacknowledged
     # PUBLISH packets (where QoS > 0) and PUBREL packets using their original
@@ -267,7 +280,7 @@ defmodule MQTT.Client do
 
     conn.session
     |> Session.unacknowledged_packets()
-    |> Enum.reduce_while(conn, fn packet, conn ->
+    |> Enum.reduce_while({:ok, conn}, fn packet, {:ok, conn} ->
       dup_packet =
         case packet do
           %Packet.Publish{} -> PacketBuilder.Publish.with_dup(packet, true)
@@ -275,14 +288,10 @@ defmodule MQTT.Client do
         end
 
       case send_packet(conn, dup_packet) do
-        {:ok, conn} -> {:cont, conn}
+        {:ok, conn} -> {:cont, {:ok, conn}}
         error -> {:halt, error}
       end
     end)
-    |> case do
-      %Conn{} = conn -> {:ok, packet, conn}
-      error -> error
-    end
   end
 
   defp decode_data(conn, message) do

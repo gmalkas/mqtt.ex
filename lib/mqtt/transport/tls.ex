@@ -78,7 +78,7 @@ defmodule MQTT.Transport.TLS do
   end
 
   def data_received(socket, {:ssl_closed, socket}) do
-    {:ok, :closed}
+    {:ok, :transport_closed}
   end
 
   def data_received(_, _), do: :unknown

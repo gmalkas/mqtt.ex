@@ -204,9 +204,11 @@ defmodule MQTT.ClientTest do
 
       assert {:ok, conn} = MQTT.Client.disconnect!(conn)
 
-      assert {:ok, packet, conn} = MQTT.Client.reconnect(conn)
+      assert {:ok, conn} = MQTT.Client.reconnect(conn)
 
       assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
+
+      assert {:ok, %Packet.Connack{} = packet, conn} = MQTT.Client.read_next_packet(conn)
 
       # This test is dependent on timing as the server may or may have not
       # sent the PUBACK packet before we disconnected. If it did, it will have

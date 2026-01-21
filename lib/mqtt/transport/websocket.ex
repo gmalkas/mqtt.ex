@@ -65,7 +65,7 @@ defmodule MQTT.Transport.Websocket do
   def data_received(handle, {type, socket}) when type in [:tcp_closed, :ssl_closed] do
     case Mint.HTTP.get_socket(handle.conn) do
       ^socket ->
-        {:ok, :closed}
+        {:ok, :transport_closed}
 
       _ ->
         :unknown

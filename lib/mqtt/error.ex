@@ -1,7 +1,7 @@
 defmodule MQTT.Error do
   alias MQTT.ErrorContext
 
-  defstruct [:reason_code_name, :context]
+  defstruct [:reason_code, :context]
 
   def duplicated_property(property_name, value_count) do
     new(:protocol_error, ErrorContext.DuplicatedProperty.new(property_name, value_count))
@@ -25,8 +25,12 @@ defmodule MQTT.Error do
     )
   end
 
-  def new(reason_code_name, context) do
-    %__MODULE__{reason_code_name: reason_code_name, context: context}
+  def new(reason_code, context) do
+    %__MODULE__{reason_code: reason_code, context: context}
+  end
+
+  def reason_string(%__MODULE__{context: %context_mod{} = context}) do
+    context_mod.to_string(context)
   end
 end
 
@@ -39,6 +43,10 @@ defmodule MQTT.ErrorContext.DuplicatedProperty do
       when property_name in @property_names do
     %__MODULE__{property_name: property_name, value_count: value_count}
   end
+
+  def to_string(%__MODULE__{} = context) do
+    "Property #{context.property_name} was expected only once but was received #{context.value_count} times"
+  end
 end
 
 defmodule MQTT.ErrorContext.MalformedPacket do
@@ -46,6 +54,10 @@ defmodule MQTT.ErrorContext.MalformedPacket do
 
   def new(reason) when is_nil(reason) or is_binary(reason) do
     %__MODULE__{reason: reason}
+  end
+
+  def to_string(%__MODULE__{} = context) do
+    "Malformed packet: #{context.reason}"
   end
 end
 
@@ -62,5 +74,9 @@ defmodule MQTT.ErrorContext.PacketIdentifierNotFound do
 
   def new(packet_identifier) do
     %__MODULE__{packet_identifier: packet_identifier}
+  end
+
+  def to_string(%__MODULE__{} = context) do
+    "Packet identifier #{context.packet_identifier} not found"
   end
 end

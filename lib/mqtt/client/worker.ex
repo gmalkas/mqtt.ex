@@ -3,7 +3,7 @@ defmodule MQTT.Client.Worker do
 
   require Logger
 
-  alias MQTT.{Client, Packet, TransportError}
+  alias MQTT.{Client, Error, Packet, TransportError}
   alias MQTT.ClientConn, as: Conn
   alias __MODULE__, as: State
 
@@ -162,19 +162,19 @@ defmodule MQTT.Client.Worker do
 
   @impl true
   def handle_info(:reconnect, %State{conn: %Conn{state: conn_state}} = state)
-      when conn_state in [:disconnected, :reconnecting] do
-    next_state =
+      when conn_state in [:disconnected] do
+    conn =
       case Client.reconnect(state.conn) do
-        {:ok, packet, conn} ->
+        {:ok, conn} ->
           {:ok, conn} = Client.set_mode(conn, :active)
 
-          handle_packets(%State{state | conn: conn}, [packet])
+          conn
 
         {:error, %TransportError{}, conn} ->
-          %State{state | conn: conn}
+          conn
       end
 
-    {:noreply, next_state}
+    {:noreply, %State{state | conn: conn}}
   end
 
   def handle_info(:reconnect, state) do
@@ -184,6 +184,11 @@ defmodule MQTT.Client.Worker do
   @impl true
   def handle_info(message, state) do
     case Client.data_received(state.conn, message) do
+      {:ok, conn, :closed} ->
+        next_state = emit_event(state, {:disconnected, :transport_closed})
+
+        {:noreply, %State{next_state | conn: conn}}
+
       {:ok, conn, packets} ->
         Logger.debug(
           "pid=#{inspect(self())}, event=received_packets, packets=#{inspect(packets)}"
@@ -195,16 +200,21 @@ defmodule MQTT.Client.Worker do
 
         {:noreply, next_state}
 
-      {:ok, :closed} ->
-        {:ok, conn} = Conn.disconnected(state.conn, true)
+      {:error, %Error{} = error} ->
+        handle_error(state, error)
 
-        next_state = emit_event(state, {:disconnected, :transport_closed})
-
-        {:noreply, %State{next_state | conn: conn}}
+      {:error, %TransportError{} = error} ->
+        handle_error(state, error)
     end
   end
 
   # HELPERS
+
+  defp handle_error(state, %MQTT.Error{} = error) do
+    {:ok, conn} = Client.disconnect(state.conn, error.reason_code, Error.reason_string(error))
+
+    emit_event(%State{state | conn: conn}, {:error, error})
+  end
 
   defp handle_error(state, %MQTT.TransportError{} = error) do
     {:ok, conn} = Client.disconnect!(state.conn, true)
