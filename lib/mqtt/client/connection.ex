@@ -1,4 +1,8 @@
-defmodule MQTT.Client.Worker do
+defmodule MQTT.Client.Connection do
+  @moduledoc """
+  Process-less MQTT client connection.
+  """
+
   use GenServer
 
   require Logger
@@ -15,6 +19,22 @@ defmodule MQTT.Client.Worker do
     GenServer.call(pid, {:publish, topic_name, payload, options})
   end
 
+  @doc """
+  Creates a new connection to a given server.
+
+  Creates a new connection struct and establishes the connection to the given
+  server, identified by the given `endpoint`.
+
+  ## Usage
+
+  ## Mode
+
+  ## TLS
+
+  ## Extended Authentication
+
+  ## Will Message
+  """
   def start_link(args) do
     GenServer.start_link(__MODULE__, args)
   end
@@ -37,6 +57,7 @@ defmodule MQTT.Client.Worker do
     {handler_mod, handler_opts} = Keyword.get(args, :handler)
     {:ok, handler_state} = handler_mod.init(handler_opts)
 
+    # TODO: Handle errors
     {:ok, conn} = Client.connect(endpoint, args)
     {:ok, conn} = Client.set_mode(conn, :active)
 
@@ -51,6 +72,7 @@ defmodule MQTT.Client.Worker do
         {:reply, :ok, %State{state | conn: conn}}
 
       {:error, error} ->
+        # TODO: Handle errors
         {:reply, {:error, error}, state}
     end
   end
@@ -86,6 +108,7 @@ defmodule MQTT.Client.Worker do
         {:noreply, %State{state | conn: conn}}
 
       {:error, _error} ->
+        # TODO: Handle errors
         {:noreply, state}
     end
   end
@@ -105,8 +128,7 @@ defmodule MQTT.Client.Worker do
   @impl true
   def handle_info(:connect_timeout, %State{conn: %Conn{state: :connecting}} = state) do
     # The server has not replied with CONNACK in time. Perhaps it is not a MQTT
-    # server, the server application is too slow, or due to poor network
-    # quality.
+    # server, the server application is too slow, or network quality is poor.
     #
     # We choose to defer to the user rather than retrying automatically. In some
     # cases, retrying with the same timeout will never succeed. The user should
@@ -265,6 +287,7 @@ defmodule MQTT.Client.Worker do
       {handler_mod, handler_opts} = Keyword.get(state.options, :handler)
       {:ok, handler_state} = handler_mod.init(handler_opts)
 
+      # TODO: Handle errors
       {:ok, conn} = Client.connect(endpoint, state.options)
       {:ok, conn} = Client.set_mode(conn, :active)
 

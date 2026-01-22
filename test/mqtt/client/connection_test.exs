@@ -32,7 +32,7 @@ defmodule MockHandler do
   end
 end
 
-defmodule MQTT.Client.WorkerTest do
+defmodule MQTT.Client.ConnectionTest do
   use ExUnit.Case, async: false
 
   import MQTT.Test.Utils
@@ -53,7 +53,7 @@ defmodule MQTT.Client.WorkerTest do
 
   test "calls the event handler for connection events" do
     {:ok, _pid} =
-      MQTT.Client.Worker.start_link(
+      MQTT.Client.Connection.start_link(
         client_id: generate_client_id(),
         endpoint: @ip_address,
         handler: {MockHandler, self()}
@@ -64,7 +64,7 @@ defmodule MQTT.Client.WorkerTest do
 
   test "supports websockets" do
     {:ok, _pid} =
-      MQTT.Client.Worker.start_link(
+      MQTT.Client.Connection.start_link(
         client_id: generate_client_id(),
         endpoint: {@ip_address, 8866},
         transport: MQTT.Transport.Websocket,
@@ -77,7 +77,7 @@ defmodule MQTT.Client.WorkerTest do
 
   test "supports TLS" do
     {:ok, _pid} =
-      MQTT.Client.Worker.start_link(
+      MQTT.Client.Connection.start_link(
         client_id: generate_client_id(),
         endpoint: {@ip_address, 8883},
         transport: MQTT.Transport.TLS,
@@ -90,7 +90,7 @@ defmodule MQTT.Client.WorkerTest do
 
   test "calls the event handler for subscription events" do
     {:ok, pid} =
-      MQTT.Client.Worker.start_link(
+      MQTT.Client.Connection.start_link(
         client_id: generate_client_id(),
         endpoint: @ip_address,
         handler: {MockHandler, self()}
@@ -100,13 +100,13 @@ defmodule MQTT.Client.WorkerTest do
 
     assert_receive {:connected, %Packet.Connack{}}
 
-    assert :ok = MQTT.Client.Worker.subscribe(pid, [topic_filter])
+    assert :ok = MQTT.Client.Connection.subscribe(pid, [topic_filter])
     assert_receive {:subscription, %Packet.Suback{}}
   end
 
   test "calls the event handler for publish events" do
     {:ok, pid} =
-      MQTT.Client.Worker.start_link(
+      MQTT.Client.Connection.start_link(
         client_id: generate_client_id(),
         endpoint: @ip_address,
         handler: {MockHandler, self()}
@@ -116,9 +116,9 @@ defmodule MQTT.Client.WorkerTest do
     payload = "Hello world!"
 
     assert_receive {:connected, %Packet.Connack{}}
-    :ok = MQTT.Client.Worker.subscribe(pid, [topic_filter])
+    :ok = MQTT.Client.Connection.subscribe(pid, [topic_filter])
 
-    assert :ok = MQTT.Client.Worker.publish(pid, topic_filter, payload)
+    assert :ok = MQTT.Client.Connection.publish(pid, topic_filter, payload)
     assert_receive {:publish, %Packet.Publish{} = packet}
 
     assert topic_filter == packet.topic_name
@@ -136,7 +136,7 @@ defmodule MQTT.Client.WorkerTest do
       ]
 
       {:ok, _pid} =
-        MQTT.Client.Worker.start_link(
+        MQTT.Client.Connection.start_link(
           client_id: generate_client_id(),
           endpoint: @ip_address,
           handler: {MockHandler, [self(), event_actions]}
@@ -155,7 +155,7 @@ defmodule MQTT.Client.WorkerTest do
     {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid)
 
     {:ok, _pid} =
-      MQTT.Client.Worker.start_link(
+      MQTT.Client.Connection.start_link(
         client_id: generate_client_id(),
         keep_alive: 1,
         timeout: 100,
@@ -182,7 +182,7 @@ defmodule MQTT.Client.WorkerTest do
     {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid, [connack_packet])
 
     {:ok, _pid} =
-      MQTT.Client.Worker.start_link(
+      MQTT.Client.Connection.start_link(
         client_id: generate_client_id(),
         endpoint: {@ip_address, server_port},
         handler: {MockHandler, self()}
@@ -198,7 +198,7 @@ defmodule MQTT.Client.WorkerTest do
     {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid)
 
     {:ok, _pid} =
-      MQTT.Client.Worker.start_link(
+      MQTT.Client.Connection.start_link(
         client_id: generate_client_id(),
         endpoint: {@ip_address, server_port},
         handler: {MockHandler, self()},
@@ -230,7 +230,7 @@ defmodule MQTT.Client.WorkerTest do
     ]
 
     {:ok, _pid} =
-      MQTT.Client.Worker.start_link(
+      MQTT.Client.Connection.start_link(
         client_id: generate_client_id(),
         endpoint: {@ip_address, server_port},
         enhanced_authentication: {authentication_method, "myusername"},
@@ -251,7 +251,7 @@ defmodule MQTT.Client.WorkerTest do
     {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid, [])
 
     {:ok, _pid} =
-      MQTT.Client.Worker.start_link(
+      MQTT.Client.Connection.start_link(
         client_id: generate_client_id(),
         endpoint: {@ip_address, server_port},
         handler: {MockHandler, self()},
