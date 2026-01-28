@@ -69,7 +69,7 @@ defmodule MQTT.ClientSession do
   end
 
   def handle_packet_from_server(%__MODULE__{} = session, %module{} = packet)
-      when module in [Packet.Publish, Packet.Pubcomp] do
+      when module in [Packet.Puback, Packet.Pubcomp] do
     session
     |> packet_acknowledged(packet)
     |> free_packet_identifier(packet.packet_identifier)
