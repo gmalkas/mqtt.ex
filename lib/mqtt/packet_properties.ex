@@ -20,18 +20,31 @@ defmodule MQTT.PacketProperties do
       end
 
       def from_decoder(properties) when is_list(properties) do
-        {properties, errors} =
-          Enum.reduce(@properties, {[], []}, fn property, {acc, errors} ->
-            case validate_property(property, Keyword.get_values(properties, property)) do
-              {:ok, value} -> {[{property, value} | acc], errors}
-              {:error, error} -> {acc, [error | errors]}
-            end
-          end)
+        Enum.reduce_while(@properties, [], fn property, acc ->
+          case validate_property(property, Keyword.get_values(properties, property)) do
+            {:ok, value} -> {:cont, [{property, value} | acc]}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+        end)
+        |> case do
+          {:error, error} ->
+            {:error, error}
 
-        if length(errors) == 0 do
-          {:ok, struct!(__MODULE__, properties)}
-        else
-          {:error, errors}
+          validated_properties ->
+            unexpected_properties =
+              Keyword.drop(properties, @properties)
+              |> Enum.map(fn {key, _} -> key end)
+
+            only_allowed_properties? = Enum.empty?(unexpected_properties)
+
+            if only_allowed_properties? do
+              {:ok, struct!(__MODULE__, validated_properties)}
+            else
+              {:error,
+               Error.malformed_packet(
+                 "received unexpected properties: #{Enum.join(unexpected_properties, ", ")}"
+               )}
+            end
         end
       end
 
