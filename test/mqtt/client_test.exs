@@ -136,13 +136,13 @@ defmodule MQTT.ClientTest do
     test "sends a SUBSCRIBE packet with the topic filters" do
       {:ok, conn, tracer_port} = connect_and_wait_for_connack()
 
-      topic_filter = "/my/topic"
+      topic_filters = ["/my/topic", "/some/other/topic"]
 
-      assert {:ok, conn} = MQTT.Client.subscribe(conn, [topic_filter])
+      assert {:ok, conn} = MQTT.Client.subscribe(conn, topic_filters)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
-               {:subscribe, conn.client_id, topic_filter}
+               {:subscribe, conn.client_id, topic_filters}
              )
 
       assert MQTT.Test.Tracer.wait_for_trace(
@@ -153,7 +153,7 @@ defmodule MQTT.ClientTest do
       expected_reason_code = :granted_qos_0
 
       assert {:ok, %Packet.Suback{} = packet, conn} = MQTT.Client.read_next_packet(conn)
-      assert [^expected_reason_code] = packet.payload.reason_codes
+      assert [^expected_reason_code, ^expected_reason_code] = packet.payload.reason_codes
       refute Session.has_packet_identifier?(conn.session, packet.packet_identifier)
     end
   end

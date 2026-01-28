@@ -23,10 +23,15 @@ defmodule MQTT.Test.Tracer do
     )
   end
 
-  def wait_for_trace(port, {:subscribe, client_id, topic_filter}) do
+  def wait_for_trace(port, {:subscribe, client_id, topic_filters}) when is_list(topic_filters) do
+    topic_filters_pattern =
+      topic_filters
+      |> Enum.map(&".*\\n\s+t: \"#{Regex.escape(&1)}\"")
+      |> Enum.join("\\n")
+
     read_from_port_until_trace(
       port,
-      ~r/MQTT RECV: CID: "#{Regex.escape(client_id)}" SUBSCRIBE.*\n.*\n\s+t: "#{Regex.escape(topic_filter)}"/
+      ~r/MQTT RECV: CID: "#{Regex.escape(client_id)}" SUBSCRIBE.*\n#{topic_filters_pattern}/
     )
   end
 
