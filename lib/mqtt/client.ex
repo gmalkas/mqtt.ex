@@ -72,11 +72,16 @@ defmodule MQTT.Client do
 
     Logger.info("endpoint=#{inspect(endpoint)}, action=connect")
 
+    conn = Conn.new({transport, transport_opts}, endpoint, conn_options)
+
     with {:ok, handle} <- transport.connect(endpoint, transport_opts) do
       send_packet(
-        Conn.connecting({transport, transport_opts}, endpoint, handle, packet, conn_options),
+        Conn.connecting(conn, handle, packet),
         packet
       )
+    else
+      {:error, error} ->
+        {:error, error, Conn.disconnected(conn)}
     end
   end
 
@@ -89,13 +94,13 @@ defmodule MQTT.Client do
         end
 
       {:ok, :transport_closed} ->
-        {:ok, conn} = Conn.disconnected(conn, true)
+        {:ok, conn} = Conn.disconnected(conn, reconnect?: true)
 
         {:ok, conn, :closed}
     end
   end
 
-  def disconnect(%Conn{} = conn, reason_code \\ :normal_disconnection, reason_string \\ nil) do
+  def disconnect(%Conn{} = conn, reason_code, reason_string \\ nil) do
     # The CONNACK and DISCONNECT packets allow a Reason Code of 0x80 or greater
     # to indicate that the Network Connection will be closed. If a Reason Code
     # of 0x80 or greater is specified, then the Network Connection MUST be
@@ -119,9 +124,9 @@ defmodule MQTT.Client do
     end
   end
 
-  def disconnect!(%Conn{} = conn, should_reconnect? \\ false) do
+  def disconnect(%Conn{} = conn) do
     with :ok <- conn.transport.close(conn.handle) do
-      Conn.disconnected(conn, should_reconnect?)
+      Conn.disconnected(conn, reconnect?: false)
     end
   end
 
@@ -188,8 +193,12 @@ defmodule MQTT.Client do
   end
 
   def set_mode(%Conn{} = conn, mode) when mode in [:active, :passive] do
-    with {:ok, handle} <- conn.transport.set_mode(conn.handle, mode) do
-      {:ok, Conn.update_handle(conn, handle)}
+    case conn.transport.set_mode(conn.handle, mode) do
+      {:ok, handle} ->
+        {:ok, Conn.update_handle(conn, handle)}
+
+      {:error, error} ->
+        {:error, error, conn}
     end
   end
 

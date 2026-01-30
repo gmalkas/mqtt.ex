@@ -10,6 +10,7 @@ defmodule MQTT.ClientConn do
   defstruct [
     :client_id,
     :connect_packet,
+    :connect_timeout,
     :connect_timer,
     :connack_properties,
     :endpoint,
@@ -31,30 +32,15 @@ defmodule MQTT.ClientConn do
     :transport_opts
   ]
 
-  def connecting(
-        {transport, transport_opts},
-        endpoint,
-        handle,
-        %Packet.Connect{} = packet,
-        options \\ []
-      ) do
-    %__MODULE__{
-      client_id: packet.payload.client_id,
-      connect_packet: packet,
-      connect_timer: set_connect_timer(Keyword.get(options, :connect_timeout, :infinity)),
-      endpoint: endpoint,
-      handle: handle,
-      keep_alive: packet.keep_alive,
-      next_topic_alias: @initial_topic_alias,
-      read_buffer: "",
-      reconnect_retry_count: 0,
-      reconnect_strategy: Keyword.get(options, :reconnect_strategy, @default_reconnect_strategy),
-      timeout: Keyword.get(options, :timeout, @default_timeout_ms),
-      session: Session.new(),
-      state: :connecting,
-      topic_aliases: %{},
-      transport: transport,
-      transport_opts: transport_opts
+  def connecting(%__MODULE__{} = conn, handle, %Packet.Connect{} = packet) do
+    %{
+      conn
+      | client_id: packet.payload.client_id,
+        connect_packet: packet,
+        connect_timer: set_connect_timer(conn.connect_timeout),
+        keep_alive: packet.keep_alive,
+        handle: handle,
+        state: :connecting
     }
   end
 
@@ -62,10 +48,13 @@ defmodule MQTT.ClientConn do
     %__MODULE__{conn | session: Session.new()}
   end
 
-  def disconnected(%__MODULE__{} = conn, should_reconnect? \\ false) do
+  def disconnected(%__MODULE__{} = conn, options \\ []) do
     cancel_timer!(conn.connect_timer)
     cancel_timer!(conn.keep_alive_timer)
     cancel_timer!(conn.ping_timer)
+
+    should_reconnect? =
+      !is_nil(conn.reconnect_strategy) && Keyword.get(options, :reconnect?, true)
 
     reconnect_timer =
       if should_reconnect? do
@@ -108,6 +97,22 @@ defmodule MQTT.ClientConn do
 
   def has_keep_alive?(%__MODULE__{} = conn) do
     !is_nil(conn.keep_alive) && conn.keep_alive > 0
+  end
+
+  def new({transport, transport_opts}, endpoint, options) do
+    %__MODULE__{
+      connect_timeout: Keyword.get(options, :connect_timeout, :infinity),
+      endpoint: endpoint,
+      next_topic_alias: @initial_topic_alias,
+      read_buffer: "",
+      reconnect_retry_count: 0,
+      reconnect_strategy: Keyword.get(options, :reconnect_strategy, @default_reconnect_strategy),
+      timeout: Keyword.get(options, :timeout, @default_timeout_ms),
+      session: Session.new(),
+      topic_aliases: %{},
+      transport: transport,
+      transport_opts: transport_opts
+    }
   end
 
   def next_packet_identifier(%__MODULE__{} = conn) do

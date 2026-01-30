@@ -202,7 +202,7 @@ defmodule MQTT.ClientTest do
 
       assert {:ok, conn} = MQTT.Client.publish(conn, topic, payload, qos: 1)
 
-      assert {:ok, conn} = MQTT.Client.disconnect!(conn)
+      assert {:ok, conn} = MQTT.Client.disconnect(conn)
 
       assert {:ok, conn} = MQTT.Client.reconnect(conn)
 
@@ -271,11 +271,11 @@ defmodule MQTT.ClientTest do
     end
   end
 
-  describe "disconnect/1" do
+  describe "disconnect/2" do
     test "sends a DISCONNECT packet" do
       {:ok, conn, tracer_port} = connect_and_wait_for_connack()
 
-      assert {:ok, conn} = MQTT.Client.disconnect(conn)
+      assert {:ok, conn} = MQTT.Client.disconnect(conn, :normal_disconnection)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,

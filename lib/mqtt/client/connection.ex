@@ -1,6 +1,5 @@
 defmodule MQTT.Client.Connection do
   @moduledoc """
-  Process-less MQTT client connection.
   """
 
   use GenServer
@@ -52,17 +51,7 @@ defmodule MQTT.Client.Connection do
 
   @impl true
   def handle_continue(:connect, args) do
-    endpoint = Keyword.get(args, :endpoint)
-
-    {handler_mod, handler_opts} = Keyword.get(args, :handler)
-    {:ok, handler_state} = handler_mod.init(handler_opts)
-
-    # TODO: Handle errors
-    {:ok, conn} = Client.connect(endpoint, args)
-    {:ok, conn} = Client.set_mode(conn, :active)
-
-    {:noreply,
-     %State{conn: conn, options: args, handler: handler_mod, handler_state: handler_state}}
+    try_to_connect(args)
   end
 
   @impl true
@@ -134,7 +123,7 @@ defmodule MQTT.Client.Connection do
     # cases, retrying with the same timeout will never succeed. The user should
     # terminate this worker instance and create another one.
 
-    {:ok, conn} = Client.disconnect!(state.conn, false)
+    {:ok, conn} = Client.disconnect(state.conn)
 
     next_state =
       emit_event(
@@ -232,6 +221,33 @@ defmodule MQTT.Client.Connection do
 
   # HELPERS
 
+  defp try_to_connect(args) do
+    endpoint = Keyword.get(args, :endpoint)
+
+    with {:ok, conn} <- Client.connect(endpoint, args),
+         {:ok, conn} <- Client.set_mode(conn, :active) do
+      {handler_mod, handler_opts} = Keyword.get(args, :handler)
+      {:ok, handler_state} = handler_mod.init(handler_opts)
+
+      {:noreply,
+       %State{conn: conn, options: args, handler: handler_mod, handler_state: handler_state}}
+    else
+      {:error, error, conn} ->
+        Logger.error("Unable to connect to #{inspect(endpoint)}: #{Exception.message(error)}")
+        reconnect_strategy = Keyword.get(args, :reconnect_strategy)
+
+        if !is_nil(reconnect_strategy) do
+          Logger.info(
+            "Will retry to connect to #{inspect(endpoint)} using #{inspect(reconnect_strategy)}"
+          )
+
+          {:noreply, conn}
+        else
+          {:stop, :normal, args}
+        end
+    end
+  end
+
   defp handle_error(state, %MQTT.Error{} = error) do
     {:ok, conn} = Client.disconnect(state.conn, error.reason_code, Error.reason_string(error))
 
@@ -239,9 +255,7 @@ defmodule MQTT.Client.Connection do
   end
 
   defp handle_error(state, %MQTT.TransportError{} = error) do
-    {:ok, conn} = Client.disconnect!(state.conn, true)
-
-    emit_event(%State{state | conn: conn}, {:disconnected, error})
+    emit_event(state, {:disconnected, error})
   end
 
   defp handle_packets(state, packets) do
@@ -279,7 +293,7 @@ defmodule MQTT.Client.Connection do
 
   defp process_event(state, {:redirected, packet}) do
     if !is_nil(packet.properties.server_reference) do
-      {:ok, _conn} = Client.disconnect!(state.conn)
+      {:ok, _conn} = Client.disconnect(state.conn)
 
       endpoint =
         choose_endpoint(packet.properties.server_reference)
@@ -293,7 +307,7 @@ defmodule MQTT.Client.Connection do
 
       %State{conn: conn, handler: handler_mod, handler_state: handler_state}
     else
-      {:ok, conn} = Client.disconnect!(state.conn)
+      {:ok, conn} = Client.disconnect(state.conn)
 
       %State{state | conn: conn}
     end
