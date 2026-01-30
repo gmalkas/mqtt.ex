@@ -143,6 +143,9 @@ defmodule MQTT.PacketDecoder do
   end
 
   defp decode_property_value(:binary, data), do: decode_binary_data(data)
+  defp decode_property_value(:byte, data), do: decode_byte(data)
+  defp decode_property_value(:two_byte_integer, data), do: decode_two_byte_integer(data)
+  defp decode_property_value(:four_byte_integer, data), do: decode_four_byte_integer(data)
   defp decode_property_value(:utf8_string, data), do: decode_utf8_string(data)
 
   def decode_byte(<<value::8>> <> rest) do

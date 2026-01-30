@@ -508,6 +508,30 @@ defmodule MQTT.ClientTest do
     assert pubrec_packet.packet_identifier == pubcomp_packet.packet_identifier
   end
 
+  test "respects Maximum Packet Size" do
+    fake_packets = [
+      PacketBuilder.Connack.new()
+      |> PacketBuilder.Connack.with_maximum_packet_size(10)
+    ]
+
+    {:ok, server_pid} = MQTT.Test.FakeServer.start_link()
+    {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid, fake_packets)
+
+    {:ok, conn} = connect(endpoint: {@ip_address, server_port}, tracer?: false)
+    {:ok, conn} = MQTT.Client.set_mode(conn, :active)
+
+    {:ok, conn, _} =
+      receive do
+        message ->
+          MQTT.Client.data_received(conn, message)
+      end
+
+    topic = "/my/topic"
+    payload = "Hello world!"
+
+    assert {:error, :packet_too_large} = MQTT.Client.publish(conn, topic, payload, qos: 1)
+  end
+
   defp connect(options \\ []) do
     client_id = Keyword.get_lazy(options, :client_id, &generate_client_id/0)
     tracer? = Keyword.get(options, :tracer?, true)

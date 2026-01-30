@@ -138,6 +138,17 @@ defmodule MQTT.ClientConn do
     end
   end
 
+  def oversized?(%__MODULE__{state: :connected} = conn, encoded_packet)
+      when is_binary(encoded_packet) do
+    maximum_packet_size = conn.connack_properties.maximum_packet_size
+    !is_nil(maximum_packet_size) && byte_size(encoded_packet) > maximum_packet_size
+  end
+
+  def oversized?(%__MODULE__{state: state}, _encoded_packet)
+      when state in [:connecting, :reconnecting] do
+    false
+  end
+
   def packet_sent(%__MODULE__{} = conn, handle, packet) do
     conn =
       conn

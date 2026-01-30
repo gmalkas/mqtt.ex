@@ -186,9 +186,15 @@ defmodule MQTT.Client do
   end
 
   def send_packet(%Conn{} = conn, packet) do
-    with {:ok, handle} <- conn.transport.send(conn.handle, Packet.encode!(packet)) do
-      Logger.debug("event=packet_sent, packet=#{inspect(packet)}")
-      {:ok, Conn.packet_sent(conn, handle, packet)}
+    encoded_packet = Packet.encode!(packet)
+
+    if !Conn.oversized?(conn, encoded_packet) do
+      with {:ok, handle} <- conn.transport.send(conn.handle, encoded_packet) do
+        Logger.debug("event=packet_sent, packet=#{inspect(packet)}")
+        {:ok, Conn.packet_sent(conn, handle, packet)}
+      end
+    else
+      {:error, :packet_too_large}
     end
   end
 
