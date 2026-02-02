@@ -82,8 +82,13 @@ defmodule MQTT.Test.FakeServer do
 
     next_state =
       case state.reply_queue do
+        [packet_group | packets] when is_list(packet_group) ->
+          Enum.each(packet_group, &send_reply!(socket, &1))
+
+          %State{state | reply_queue: packets}
+
         [packet | packets] ->
-          send_reply(socket, packet)
+          send_reply!(socket, packet)
 
           %State{state | reply_queue: packets}
 
@@ -108,7 +113,7 @@ defmodule MQTT.Test.FakeServer do
   defp close_socket(nil), do: :ok
   defp close_socket(socket), do: :gen_tcp.close(socket)
 
-  defp send_reply(socket, packet) do
+  defp send_reply!(socket, packet) do
     :ok = :gen_tcp.send(socket, Packet.encode!(packet))
   end
 

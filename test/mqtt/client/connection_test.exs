@@ -260,4 +260,27 @@ defmodule MQTT.Client.ConnectionTest do
 
     assert_receive {:error, %MQTT.TransportError{reason: :connect_timeout}}, 50
   end
+
+  test "handles server-initiated disconnect" do
+    fake_packets =
+      [
+        [
+          PacketBuilder.Connack.new(),
+          PacketBuilder.Disconnect.new(:server_busy)
+        ]
+      ]
+
+    {:ok, server_pid} = MQTT.Test.FakeServer.start_link()
+    {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid, fake_packets)
+
+    {:ok, _pid} =
+      MQTT.Client.Connection.start_link(
+        client_id: generate_client_id(),
+        endpoint: {@ip_address, server_port},
+        handler: {MockHandler, self()}
+      )
+
+    assert_receive {:connected, _}
+    assert_receive {:disconnected, %Packet.Disconnect{reason_code: :server_busy}}
+  end
 end

@@ -276,6 +276,13 @@ defmodule MQTT.Client.Connection do
             {:connected, packet}
           end
 
+        %Packet.Disconnect{} ->
+          if packet.reason_code == :server_moved || packet.reason_code == :use_another_server do
+            {:redirected, packet}
+          else
+            {:disconnected, packet}
+          end
+
         %Packet.Suback{} ->
           {:subscription, packet}
 
@@ -311,6 +318,12 @@ defmodule MQTT.Client.Connection do
 
       %State{state | conn: conn}
     end
+  end
+
+  defp process_event(state, {:disconnected, _packet}) do
+    {:ok, conn} = Client.disconnect(state.conn)
+
+    %State{state | conn: conn}
   end
 
   defp process_event(state, _), do: state

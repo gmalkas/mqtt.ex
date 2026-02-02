@@ -106,6 +106,10 @@ defmodule MQTT.PacketDecoder do
     Packet.Pubcomp.decode(data, remaining_length)
   end
 
+  defp decode_packet(:disconnect, _flags, remaining_length, data) do
+    Packet.Disconnect.decode(data, remaining_length)
+  end
+
   def decode_properties(data) do
     with {:ok, length, rest} <- decode_variable_byte_integer(data),
          {:ok, properties, rest} <- decode_properties(rest, length) do

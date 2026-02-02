@@ -278,6 +278,12 @@ defmodule MQTT.ClientConn do
      })}
   end
 
+  defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Disconnect{} = _packet) do
+    cancel_timer!(conn.ping_timer)
+
+    {:ok, %{conn | ping_timer: nil}}
+  end
+
   defp do_handle_packet_from_server(%__MODULE__{} = conn, %Packet.Publish{} = _packet) do
     {:ok, conn}
   end
