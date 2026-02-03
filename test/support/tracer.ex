@@ -26,7 +26,23 @@ defmodule MQTT.Test.Tracer do
   def wait_for_trace(port, {:subscribe, client_id, topic_filters}) when is_list(topic_filters) do
     topic_filters_pattern =
       topic_filters
-      |> Enum.map(&".*\\n\s+t: \"#{Regex.escape(&1)}\"")
+      |> Enum.map(fn
+        {filter, options} ->
+          options_pattern =
+            [:max_qos, :no_local?, :retain_as_published?, :retain_handling]
+            |> Enum.flat_map(fn option_name ->
+              case options[option_name] do
+                nil -> [".*"]
+                value -> [format_subscription_option(option_name, value)]
+              end
+            end)
+            |> Enum.join(", ")
+
+          ".*#{options_pattern}\\n\s+t: \"#{Regex.escape(filter)}\""
+
+        filter ->
+          ".*\\n\s+t: \"#{Regex.escape(filter)}\""
+      end)
       |> Enum.join("\\n")
 
     read_from_port_until_trace(
@@ -138,4 +154,9 @@ defmodule MQTT.Test.Tracer do
 
   defp format_trace_type(:send), do: "SEND"
   defp format_trace_type(:recv), do: "RECV"
+
+  defp format_subscription_option(:max_qos, value), do: "q:#{value}"
+  defp format_subscription_option(:no_local?, value), do: "no_local:#{value}"
+  defp format_subscription_option(:retain_as_published?, value), do: "rap:#{value}"
+  defp format_subscription_option(:retain_handling, 0), do: "rh:send_retain"
 end
