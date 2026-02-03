@@ -42,6 +42,10 @@ defmodule MQTT.Client.Connection do
     GenServer.call(pid, {:subscribe, topic_filters})
   end
 
+  def unsubscribe(pid, topic_filters) do
+    GenServer.call(pid, {:unsubscribe, topic_filters})
+  end
+
   # CALLBACKS
 
   @impl true
@@ -69,6 +73,18 @@ defmodule MQTT.Client.Connection do
   @impl true
   def handle_call({:subscribe, topic_filters}, _from, state) do
     case Client.subscribe(state.conn, topic_filters) do
+      {:ok, conn} ->
+        {:reply, :ok, %State{state | conn: conn}}
+
+      {:error, error} ->
+        # TODO: Handle errors
+        {:reply, {:error, error}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:unsubscribe, topic_filters}, _from, state) do
+    case Client.unsubscribe(state.conn, topic_filters) do
       {:ok, conn} ->
         {:reply, :ok, %State{state | conn: conn}}
 
@@ -263,7 +279,7 @@ defmodule MQTT.Client.Connection do
   end
 
   defp handle_packet(packet, state) do
-    # TODO: Handle DISCONNECT, PUBACK, PUBREC, PUBCOMP, UNSUBACK
+    # TODO: Handle PUBACK, PUBREC, PUBCOMP
     event =
       case packet do
         %Packet.Auth{} ->
@@ -283,14 +299,17 @@ defmodule MQTT.Client.Connection do
             {:disconnected, packet}
           end
 
-        %Packet.Suback{} ->
-          {:subscription, packet}
-
         %Packet.Publish{} ->
           {:publish, packet}
 
         %Packet.Pingresp{} ->
           {:pong, packet}
+
+        %Packet.Suback{} ->
+          {:subscription, packet}
+
+        %Packet.Unsuback{} ->
+          {:subscription, packet}
       end
 
     state

@@ -125,6 +125,27 @@ defmodule MQTT.Client.ConnectionTest do
     assert payload == packet.payload.data
   end
 
+  describe "unsubscribe/2" do
+    test "unsubscribes from the given topic filters" do
+      {:ok, pid} =
+        MQTT.Client.Connection.start_link(
+          client_id: generate_client_id(),
+          endpoint: @ip_address,
+          handler: {MockHandler, self()}
+        )
+
+      topic_filter = "/my/topic"
+
+      assert_receive {:connected, %Packet.Connack{}}
+
+      assert :ok = MQTT.Client.Connection.subscribe(pid, [topic_filter])
+      assert_receive {:subscription, %Packet.Suback{}}
+
+      assert :ok = MQTT.Client.Connection.unsubscribe(pid, [topic_filter])
+      assert_receive {:subscription, %Packet.Unsuback{}}
+    end
+  end
+
   describe "handler actions" do
     test "supports subscribing and publishing" do
       topic_filter = "/my/topic"
