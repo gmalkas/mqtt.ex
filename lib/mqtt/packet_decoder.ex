@@ -31,7 +31,8 @@ defmodule MQTT.PacketDecoder do
     {:error, :incomplete_packet}
   end
 
-  defp decode_fixed_header(_rest), do: {:error, Error.malformed_packet("unexpected fixed header")}
+  defp decode_fixed_header(rest),
+    do: {:error, Error.malformed_packet("unexpected fixed header: #{inspect(rest)}")}
 
   defp packet_type(packet_type_value) do
     case Packet.packet_type_from_value(packet_type_value) do
@@ -59,8 +60,12 @@ defmodule MQTT.PacketDecoder do
   defp decode_header_flags(:pingresp, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
   defp decode_header_flags(:disconnect, <<0::1, 0::1, 0::1, 0::1>>), do: {:ok, %{}}
 
-  defp decode_header_flags(_type, _flags),
-    do: {:error, Error.malformed_packet("unexpected flags")}
+  defp decode_header_flags(type, flags),
+    do:
+      {:error,
+       Error.malformed_packet(
+         "unexpected flags for packet #{String.upcase(to_string(type))}: #{inspect(flags)}"
+       )}
 
   defp decode_remaining_length(data) do
     decode_variable_byte_integer(data)

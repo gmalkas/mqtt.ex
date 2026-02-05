@@ -106,7 +106,7 @@ defmodule MQTT.Packet.Publish.Flags do
          retain?: retain?
        }}
     else
-      {:error, Error.malformed_packet()}
+      {:error, Error.malformed_packet("unexpected QoS value: #{inspect(qos)}")}
     end
   end
 end
