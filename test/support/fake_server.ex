@@ -22,6 +22,10 @@ defmodule MQTT.Test.FakeServer do
     GenServer.call(pid, :has_client?)
   end
 
+  def reply!(pid, packet) do
+    GenServer.call(pid, {:reply, packet})
+  end
+
   def start_link(args \\ []) do
     GenServer.start_link(__MODULE__, args)
   end
@@ -60,6 +64,13 @@ defmodule MQTT.Test.FakeServer do
   end
 
   @impl true
+  def handle_call({:reply, packet}, _from, %State{} = state) do
+    send_reply!(state.socket, packet)
+
+    {:reply, :ok, state}
+  end
+
+  @impl true
   def handle_call(:terminate, _from, %State{} = state) do
     close_socket(state.socket)
 
@@ -78,7 +89,7 @@ defmodule MQTT.Test.FakeServer do
 
   @impl true
   def handle_info({:tcp, socket, _data}, %State{socket: socket} = state) do
-    :inet.setopts(socket, active: :once)
+    :ok = :inet.setopts(socket, active: :once)
 
     next_state =
       case state.reply_queue do

@@ -142,6 +142,7 @@ defmodule MQTT.Packet do
              __MODULE__.Publish,
              __MODULE__.Pubrec,
              __MODULE__.Pubrel,
+             __MODULE__.Suback,
              __MODULE__.Subscribe,
              __MODULE__.Unsubscribe,
              __MODULE__.Disconnect,

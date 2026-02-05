@@ -304,4 +304,50 @@ defmodule MQTT.Client.ConnectionTest do
     assert_receive {:connected, _}
     assert_receive {:disconnected, %Packet.Disconnect{reason_code: :server_busy}}
   end
+
+  test "supports request/response" do
+    fake_packets =
+      [
+        PacketBuilder.Connack.new()
+      ]
+
+    {:ok, server_pid} = MQTT.Test.FakeServer.start_link()
+    {:ok, server_port} = MQTT.Test.FakeServer.accept_loop(server_pid, fake_packets)
+
+    {:ok, pid} =
+      MQTT.Client.Connection.start_link(
+        client_id: generate_client_id(),
+        endpoint: {@ip_address, server_port},
+        handler: {MockHandler, self()}
+      )
+
+    assert_receive {:connected, _}
+
+    assert {:ok, subscribe_packet} = MQTT.Client.Connection.subscribe(pid, ["/response"])
+
+    MQTT.Test.FakeServer.reply!(
+      server_pid,
+      PacketBuilder.Suback.new(subscribe_packet.packet_identifier, [:granted_qos_1])
+    )
+
+    assert_receive {:subscription, %Packet.Suback{}}
+
+    response_topic = "/response"
+    request_id = "abcdefg123456"
+
+    assert {:ok, _} =
+             MQTT.Client.Connection.publish(pid, "/request", "1+1=?",
+               properties: [response_topic: response_topic, correlation_data: request_id]
+             )
+
+    MQTT.Test.FakeServer.reply!(
+      server_pid,
+      PacketBuilder.Publish.new(response_topic, "2", [], correlation_data: request_id)
+    )
+
+    assert_receive {:publish, %Packet.Publish{} = packet}
+
+    assert packet.topic_name == response_topic
+    assert packet.properties.correlation_data == request_id
+  end
 end

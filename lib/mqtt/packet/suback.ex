@@ -1,7 +1,10 @@
 defmodule MQTT.Packet.Suback do
   import MQTT.PacketDecoder, only: [decode_properties: 1, decode_packet_identifier: 1]
 
-  alias MQTT.Packet
+  alias MQTT.{Packet, PacketEncoder}
+
+  @control_packet_type 9
+  @control_packet_flags 0
 
   defstruct [:packet_identifier, :properties, :payload]
 
@@ -20,6 +23,22 @@ defmodule MQTT.Packet.Suback do
     end
   end
 
+  def encode!(%__MODULE__{} = packet) do
+    packet_identifier = PacketEncoder.encode_two_byte_integer(packet.packet_identifier)
+    properties = __MODULE__.Properties.encode!(packet.properties)
+
+    variable_header = packet_identifier <> properties
+    payload = __MODULE__.Payload.encode!(packet.payload)
+
+    remaining_length = byte_size(variable_header) + byte_size(payload)
+
+    fixed_header =
+      <<@control_packet_type::4, @control_packet_flags::4>> <>
+        PacketEncoder.encode_variable_byte_integer(remaining_length)
+
+    fixed_header <> variable_header <> payload
+  end
+
   defp payload_length(remaining_length, properties_length) do
     remaining_length - properties_length - Packet.wire_byte_size(:packet_identifier)
   end
@@ -34,6 +53,8 @@ end
 defmodule MQTT.Packet.Suback.Payload do
   import MQTT.PacketDecoder, only: [decode_reason_code: 2]
 
+  alias MQTT.{Packet, PacketEncoder}
+
   defstruct [:reason_codes]
 
   def decode(data, payload_length) do
@@ -42,11 +63,17 @@ defmodule MQTT.Packet.Suback.Payload do
     end
   end
 
-  def do_decode_payload(data, length, reason_codes \\ [])
+  def encode!(%__MODULE__{reason_codes: reason_codes}) do
+    reason_codes
+    |> Enum.map(&PacketEncoder.encode_byte(Packet.reason_code_by_name!(&1)))
+    |> Enum.join(<<>>)
+  end
 
-  def do_decode_payload(data, 0, reason_codes), do: {:ok, Enum.reverse(reason_codes), data}
+  defp do_decode_payload(data, length, reason_codes \\ [])
 
-  def do_decode_payload(data, length, reason_codes) do
+  defp do_decode_payload(data, 0, reason_codes), do: {:ok, Enum.reverse(reason_codes), data}
+
+  defp do_decode_payload(data, length, reason_codes) do
     with {:ok, reason_code, rest} <- decode_reason_code(:suback, data) do
       do_decode_payload(rest, length - 1, [reason_code | reason_codes])
     end
