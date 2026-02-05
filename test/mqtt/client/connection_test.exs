@@ -100,7 +100,7 @@ defmodule MQTT.Client.ConnectionTest do
 
     assert_receive {:connected, %Packet.Connack{}}
 
-    assert :ok = MQTT.Client.Connection.subscribe(pid, [topic_filter])
+    assert {:ok, _} = MQTT.Client.Connection.subscribe(pid, [topic_filter])
     assert_receive {:subscription, %Packet.Suback{}}
   end
 
@@ -116,9 +116,9 @@ defmodule MQTT.Client.ConnectionTest do
     payload = "Hello world!"
 
     assert_receive {:connected, %Packet.Connack{}}
-    :ok = MQTT.Client.Connection.subscribe(pid, [topic_filter])
+    {:ok, _} = MQTT.Client.Connection.subscribe(pid, [topic_filter])
 
-    assert :ok = MQTT.Client.Connection.publish(pid, topic_filter, payload)
+    assert {:ok, _} = MQTT.Client.Connection.publish(pid, topic_filter, payload)
     assert_receive {:publish, %Packet.Publish{} = packet}
 
     assert topic_filter == packet.topic_name
@@ -138,10 +138,10 @@ defmodule MQTT.Client.ConnectionTest do
 
       assert_receive {:connected, %Packet.Connack{}}
 
-      assert :ok = MQTT.Client.Connection.subscribe(pid, [topic_filter])
+      assert {:ok, _} = MQTT.Client.Connection.subscribe(pid, [topic_filter])
       assert_receive {:subscription, %Packet.Suback{}}
 
-      assert :ok = MQTT.Client.Connection.unsubscribe(pid, [topic_filter])
+      assert {:ok, _} = MQTT.Client.Connection.unsubscribe(pid, [topic_filter])
       assert_receive {:subscription, %Packet.Unsuback{}}
     end
   end

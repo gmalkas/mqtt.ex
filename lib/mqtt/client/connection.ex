@@ -61,8 +61,8 @@ defmodule MQTT.Client.Connection do
   @impl true
   def handle_call({:publish, topic_name, payload, options}, _from, state) do
     case Client.publish(state.conn, topic_name, payload, options) do
-      {:ok, conn} ->
-        {:reply, :ok, %State{state | conn: conn}}
+      {:ok, packet, conn} ->
+        {:reply, {:ok, packet}, %State{state | conn: conn}}
 
       {:error, error} ->
         # TODO: Handle errors
@@ -73,8 +73,8 @@ defmodule MQTT.Client.Connection do
   @impl true
   def handle_call({:subscribe, topic_filters}, _from, state) do
     case Client.subscribe(state.conn, topic_filters) do
-      {:ok, conn} ->
-        {:reply, :ok, %State{state | conn: conn}}
+      {:ok, packet, conn} ->
+        {:reply, {:ok, packet}, %State{state | conn: conn}}
 
       {:error, error} ->
         # TODO: Handle errors
@@ -85,8 +85,8 @@ defmodule MQTT.Client.Connection do
   @impl true
   def handle_call({:unsubscribe, topic_filters}, _from, state) do
     case Client.unsubscribe(state.conn, topic_filters) do
-      {:ok, conn} ->
-        {:reply, :ok, %State{state | conn: conn}}
+      {:ok, packet, conn} ->
+        {:reply, {:ok, packet}, %State{state | conn: conn}}
 
       {:error, error} ->
         # TODO: Handle errors
@@ -97,7 +97,7 @@ defmodule MQTT.Client.Connection do
   @impl true
   def handle_cast({:auth, reason_code, authentication_method, authentication_data}, state) do
     case Client.auth(state.conn, reason_code, authentication_method, authentication_data) do
-      {:ok, conn} ->
+      {:ok, _, conn} ->
         {:noreply, %State{state | conn: conn}}
 
       {:error, _error} ->
@@ -109,7 +109,7 @@ defmodule MQTT.Client.Connection do
   @impl true
   def handle_cast({:publish, topic_name, payload, options}, state) do
     case Client.publish(state.conn, topic_name, payload, options) do
-      {:ok, conn} ->
+      {:ok, _, conn} ->
         {:noreply, %State{state | conn: conn}}
 
       {:error, _error} ->
@@ -121,7 +121,7 @@ defmodule MQTT.Client.Connection do
   @impl true
   def handle_cast({:subscribe, topic_filters}, state) do
     case Client.subscribe(state.conn, topic_filters) do
-      {:ok, conn} ->
+      {:ok, _, conn} ->
         {:noreply, %State{state | conn: conn}}
 
       {:error, _error} ->
@@ -161,7 +161,7 @@ defmodule MQTT.Client.Connection do
     # Control Packets, the Client MUST send a PINGREQ packet [MQTT-3.1.2-20].
 
     case Client.ping(state.conn) do
-      {:ok, conn} ->
+      {:ok, _, conn} ->
         {:noreply, %State{state | conn: conn}}
 
       {:error, error} ->
@@ -192,7 +192,7 @@ defmodule MQTT.Client.Connection do
       when conn_state in [:disconnected] do
     conn =
       case Client.reconnect(state.conn) do
-        {:ok, conn} ->
+        {:ok, _, conn} ->
           {:ok, conn} = Client.set_mode(conn, :active)
 
           conn
@@ -228,10 +228,10 @@ defmodule MQTT.Client.Connection do
         {:noreply, next_state}
 
       {:error, %Error{} = error} ->
-        handle_error(state, error)
+        {:noreply, handle_error(state, error)}
 
       {:error, %TransportError{} = error} ->
-        handle_error(state, error)
+        {:noreply, handle_error(state, error)}
     end
   end
 
@@ -240,7 +240,7 @@ defmodule MQTT.Client.Connection do
   defp try_to_connect(args) do
     endpoint = Keyword.get(args, :endpoint)
 
-    with {:ok, conn} <- Client.connect(endpoint, args),
+    with {:ok, _, conn} <- Client.connect(endpoint, args),
          {:ok, conn} <- Client.set_mode(conn, :active) do
       {handler_mod, handler_opts} = Keyword.get(args, :handler)
       {:ok, handler_state} = handler_mod.init(handler_opts)
@@ -328,7 +328,7 @@ defmodule MQTT.Client.Connection do
       {:ok, handler_state} = handler_mod.init(handler_opts)
 
       # TODO: Handle errors
-      {:ok, conn} = Client.connect(endpoint, state.options)
+      {:ok, _, conn} = Client.connect(endpoint, state.options)
       {:ok, conn} = Client.set_mode(conn, :active)
 
       %State{conn: conn, handler: handler_mod, handler_state: handler_state}

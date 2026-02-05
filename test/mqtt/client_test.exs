@@ -110,7 +110,7 @@ defmodule MQTT.ClientTest do
       # replying before the read timeout.
       assert {:ok, %Packet.Connack{}, watcher_conn} = MQTT.Client.read_next_packet(watcher_conn)
 
-      assert {:ok, watcher_conn} = MQTT.Client.subscribe(watcher_conn, [will_topic])
+      assert {:ok, _, watcher_conn} = MQTT.Client.subscribe(watcher_conn, [will_topic])
       assert {:ok, %Packet.Suback{}, watcher_conn} = MQTT.Client.read_next_packet(watcher_conn)
 
       {:ok, conn, tracer_port} = connect(will_message: {will_topic, will_payload})
@@ -141,7 +141,7 @@ defmodule MQTT.ClientTest do
         {"/some/other/topic", max_qos: 1, no_local?: true, retain_as_published?: true}
       ]
 
-      assert {:ok, conn} = MQTT.Client.subscribe(conn, topic_filters)
+      assert {:ok, _, conn} = MQTT.Client.subscribe(conn, topic_filters)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -165,7 +165,7 @@ defmodule MQTT.ClientTest do
 
       topic_filter_1 = "/my/topic"
 
-      assert {:ok, conn} = MQTT.Client.subscribe(conn, [topic_filter_1])
+      assert {:ok, _, conn} = MQTT.Client.subscribe(conn, [topic_filter_1])
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -174,7 +174,7 @@ defmodule MQTT.ClientTest do
 
       assert {:ok, %Packet.Suback{}, conn} = MQTT.Client.read_next_packet(conn)
 
-      assert {:ok, conn} = MQTT.Client.unsubscribe(conn, [topic_filter_1])
+      assert {:ok, _, conn} = MQTT.Client.unsubscribe(conn, [topic_filter_1])
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -201,11 +201,11 @@ defmodule MQTT.ClientTest do
       topic = "/my/topic"
       payload = "Hello world!"
 
-      assert {:ok, conn} = MQTT.Client.publish(conn, topic, payload, qos: 1)
+      assert {:ok, _, conn} = MQTT.Client.publish(conn, topic, payload, qos: 1)
 
       assert {:ok, conn} = MQTT.Client.disconnect(conn)
 
-      assert {:ok, conn} = MQTT.Client.reconnect(conn)
+      assert {:ok, _, conn} = MQTT.Client.reconnect(conn)
 
       assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
 
@@ -254,7 +254,7 @@ defmodule MQTT.ClientTest do
       topic = "/my/topic"
       payload = "Hello world!"
 
-      assert {:ok, conn} = MQTT.Client.publish(conn, topic, payload, qos: 1)
+      assert {:ok, _, conn} = MQTT.Client.publish(conn, topic, payload, qos: 1)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -291,7 +291,7 @@ defmodule MQTT.ClientTest do
     test "sends a PINGREQ packet" do
       {:ok, conn, tracer_port} = connect_and_wait_for_connack()
 
-      assert {:ok, conn} = MQTT.Client.ping(conn)
+      assert {:ok, _, conn} = MQTT.Client.ping(conn)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -314,7 +314,7 @@ defmodule MQTT.ClientTest do
       topic = "/my/topic"
       application_message = "Hello world!"
 
-      assert {:ok, conn} = MQTT.Client.subscribe(conn, [topic])
+      assert {:ok, _, conn} = MQTT.Client.subscribe(conn, [topic])
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -323,7 +323,7 @@ defmodule MQTT.ClientTest do
 
       assert {:ok, %Packet.Suback{}, conn} = MQTT.Client.read_next_packet(conn)
 
-      assert {:ok, conn} = MQTT.Client.publish(conn, topic, application_message)
+      assert {:ok, _, conn} = MQTT.Client.publish(conn, topic, application_message)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -340,14 +340,14 @@ defmodule MQTT.ClientTest do
       topic = random_topic()
       application_message = "Hello world!"
 
-      assert {:ok, conn} = MQTT.Client.publish(conn, topic, application_message, retain?: true)
+      assert {:ok, _, conn} = MQTT.Client.publish(conn, topic, application_message, retain?: true)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
                {:publish, conn.client_id, topic}
              )
 
-      assert {:ok, conn} = MQTT.Client.subscribe(conn, [topic])
+      assert {:ok, _, conn} = MQTT.Client.subscribe(conn, [topic])
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -372,7 +372,7 @@ defmodule MQTT.ClientTest do
       topic = random_topic()
       application_message = "Hello world!"
 
-      assert {:ok, conn} = MQTT.Client.subscribe(conn, [{topic, [retain_as_published?: true]}])
+      assert {:ok, _, conn} = MQTT.Client.subscribe(conn, [{topic, [retain_as_published?: true]}])
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -381,7 +381,7 @@ defmodule MQTT.ClientTest do
 
       assert {:ok, %Packet.Suback{}, conn} = MQTT.Client.read_next_packet(conn)
 
-      assert {:ok, conn} = MQTT.Client.publish(conn, topic, application_message, retain?: true)
+      assert {:ok, _, conn} = MQTT.Client.publish(conn, topic, application_message, retain?: true)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -404,7 +404,7 @@ defmodule MQTT.ClientTest do
       topic = random_topic()
       application_message = "Hello world!"
 
-      assert {:ok, conn} = MQTT.Client.subscribe(conn, [{topic, [no_local?: true]}])
+      assert {:ok, _, conn} = MQTT.Client.subscribe(conn, [{topic, [no_local?: true]}])
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -413,7 +413,7 @@ defmodule MQTT.ClientTest do
 
       assert {:ok, %Packet.Suback{}, conn} = MQTT.Client.read_next_packet(conn)
 
-      assert {:ok, conn} = MQTT.Client.publish(conn, topic, application_message)
+      assert {:ok, _, conn} = MQTT.Client.publish(conn, topic, application_message)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -434,14 +434,14 @@ defmodule MQTT.ClientTest do
     topic = "/my/topic"
     application_message = "Hello world!"
 
-    assert {:ok, conn} = MQTT.Client.publish(conn, topic, application_message)
+    assert {:ok, _, conn} = MQTT.Client.publish(conn, topic, application_message)
 
     assert MQTT.Test.Tracer.wait_for_trace(
              tracer_port,
              {:publish, conn.client_id, topic}
            )
 
-    assert {:ok, conn} = MQTT.Client.publish(conn, topic, application_message, qos: 1)
+    assert {:ok, _, conn} = MQTT.Client.publish(conn, topic, application_message, qos: 1)
 
     assert {:ok, topic_alias} = Conn.fetch_topic_alias(conn, topic)
 
@@ -464,7 +464,7 @@ defmodule MQTT.ClientTest do
 
     :timer.sleep(1000)
 
-    {:ok, conn} = MQTT.Client.tick(conn)
+    {:ok, _, conn} = MQTT.Client.tick(conn)
 
     assert MQTT.Test.Tracer.wait_for_trace(
              tracer_port,
@@ -483,7 +483,7 @@ defmodule MQTT.ClientTest do
     topic = "/my/topic"
     payload = "Hello world!"
 
-    assert {:ok, conn} = MQTT.Client.publish(conn, topic, payload, qos: 2)
+    assert {:ok, _, conn} = MQTT.Client.publish(conn, topic, payload, qos: 2)
 
     assert MQTT.Test.Tracer.wait_for_trace(
              tracer_port,
@@ -498,7 +498,7 @@ defmodule MQTT.ClientTest do
     assert {:ok, %Packet.Pubrec{} = pubrec_packet, conn} = MQTT.Client.read_next_packet(conn)
 
     pubrel_packet = PacketBuilder.Pubrel.new(pubrec_packet.packet_identifier)
-    assert {:ok, conn} = MQTT.Client.send_packet(conn, pubrel_packet)
+    assert {:ok, _, conn} = MQTT.Client.send_packet(conn, pubrel_packet)
 
     assert MQTT.Test.Tracer.wait_for_trace(
              tracer_port,
@@ -552,11 +552,13 @@ defmodule MQTT.ClientTest do
 
     if tracer? do
       tracer_port = MQTT.Test.Tracer.start!(client_id)
-      {:ok, conn} = MQTT.Client.connect(endpoint, connect_options)
+      {:ok, _, conn} = MQTT.Client.connect(endpoint, connect_options)
 
       {:ok, conn, tracer_port}
     else
-      MQTT.Client.connect(endpoint, connect_options)
+      {:ok, _, conn} = MQTT.Client.connect(endpoint, connect_options)
+
+      {:ok, conn}
     end
   end
 

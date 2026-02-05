@@ -118,7 +118,7 @@ defmodule MQTT.Client do
         packet
       end
 
-    with {:ok, conn} <- send_packet(conn, packet),
+    with {:ok, _, conn} <- send_packet(conn, packet),
          :ok <- conn.transport.close(conn.handle) do
       Conn.disconnected(conn, reconnect?: false)
     end
@@ -191,7 +191,7 @@ defmodule MQTT.Client do
     if !Conn.oversized?(conn, encoded_packet) do
       with {:ok, handle} <- conn.transport.send(conn.handle, encoded_packet) do
         Logger.debug("event=packet_sent, packet=#{inspect(packet)}")
-        {:ok, Conn.packet_sent(conn, handle, packet)}
+        {:ok, packet, Conn.packet_sent(conn, handle, packet)}
       end
     else
       {:error, :packet_too_large}
@@ -303,7 +303,7 @@ defmodule MQTT.Client do
         end
 
       case send_packet(conn, dup_packet) do
-        {:ok, conn} -> {:cont, {:ok, conn}}
+        {:ok, _, conn} -> {:cont, {:ok, conn}}
         error -> {:halt, error}
       end
     end)
