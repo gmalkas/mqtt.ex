@@ -139,6 +139,7 @@ defmodule MQTT.Client do
   def publish(%Conn{} = conn, topic, payload, options \\ []) do
     qos = Keyword.get(options, :qos, 0)
     retain? = Keyword.get(options, :retain?, false)
+    properties = Keyword.get(options, :properties, [])
 
     {packet_identifier, conn} =
       if qos > 0 do
@@ -153,7 +154,13 @@ defmodule MQTT.Client do
       {topic_with_alias, conn} = Conn.topic_alias(conn, topic)
 
       packet =
-        PacketBuilder.Publish.new(packet_identifier, topic_with_alias, payload, options)
+        PacketBuilder.Publish.new(
+          packet_identifier,
+          topic_with_alias,
+          payload,
+          options,
+          properties
+        )
 
       send_packet(conn, packet)
     end

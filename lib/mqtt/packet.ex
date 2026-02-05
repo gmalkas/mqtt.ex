@@ -1,6 +1,8 @@
 defmodule MQTT.Packet do
   require Logger
 
+  @max_packet_identifier 0xFFFF
+
   @packet_type_by_value %{
     0 => :reserved,
     1 => :connect,
@@ -161,6 +163,10 @@ defmodule MQTT.Packet do
   end
 
   def packet_type_from_value(value), do: Map.fetch(@packet_type_by_value, value)
+
+  def random_packet_identifier do
+    :rand.uniform(@max_packet_identifier)
+  end
 
   def reason_code_name_by_packet_type_and_value(packet_type, value) do
     Map.fetch(@reason_code_name_by_packet_type_and_value, {packet_type, value})

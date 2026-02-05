@@ -1,8 +1,6 @@
 defmodule MQTT.ClientSession do
   alias MQTT.Packet
 
-  @max_packet_identifier 0xFFFF
-
   defstruct unacknowledged_packets: Map.new(),
             unacknowledged_packet_identifiers: [],
             used_packet_identifiers: MapSet.new()
@@ -12,7 +10,7 @@ defmodule MQTT.ClientSession do
   end
 
   def allocate_packet_identifier(%__MODULE__{} = session) do
-    identifier = :rand.uniform(@max_packet_identifier)
+    identifier = Packet.random_packet_identifier()
 
     if !MapSet.member?(session.used_packet_identifiers, identifier) do
       {identifier,
