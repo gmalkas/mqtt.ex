@@ -85,7 +85,7 @@ defmodule MQTT.Client.ConnectionTest do
         handler: {MockHandler, self()}
       )
 
-    assert_receive {:connected, %Packet.Connack{}}
+    assert_receive {:connected, %Packet.Connack{}}, 1_000
   end
 
   test "calls the event handler for subscription events" do
