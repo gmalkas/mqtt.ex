@@ -70,10 +70,6 @@ defmodule MQTT.Transport.TCP do
   end
 
   def send(socket, payload) do
-    Logger.debug(
-      "socket=#{inspect(socket)}, action=send, size=#{byte_size(payload)}, data=#{Base.encode16(payload)}"
-    )
-
     with :ok <- :gen_tcp.send(socket, payload) do
       {:ok, socket}
     else

@@ -92,10 +92,6 @@ defmodule MQTT.Transport.TLS do
   end
 
   def send(socket, payload) do
-    Logger.debug(
-      "socket=#{inspect(socket)}, action=send, size=#{byte_size(payload)}, data=#{Base.encode16(payload)}"
-    )
-
     with :ok <- :ssl.send(socket, payload) do
       {:ok, socket}
     else

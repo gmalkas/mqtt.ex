@@ -11,10 +11,6 @@ defmodule MQTT.PacketDecoder do
 
   defp decode_header(data) when is_binary(data) do
     with {:ok, packet_type, flags, remaining_length, rest} <- decode_fixed_header(data) do
-      Logger.debug(
-        "event=decoded_fixed_header, packet_type=#{packet_type}, flags=#{inspect(flags)}, remaining_length=#{remaining_length}"
-      )
-
       decode_packet(packet_type, flags, remaining_length, rest)
     end
   end

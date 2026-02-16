@@ -129,8 +129,6 @@ defmodule MQTT.Test.Tracer do
   defp read_from_port_until_trace(port, trace, buffer \\ "") do
     receive do
       {^port, {:data, data}} ->
-        Logger.debug("#{inspect(port)}: data=#{inspect(data)}")
-
         buffer = buffer <> data
 
         if match_trace?(buffer, trace) do
