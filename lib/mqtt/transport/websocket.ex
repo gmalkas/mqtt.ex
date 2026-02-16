@@ -47,7 +47,7 @@ defmodule MQTT.Transport.Websocket do
     end
   end
 
-  def data_received(handle, {type, socket, data}) when type in [:tcp, :ssl] do
+  def data_received(%__MODULE__{} = handle, {type, socket, data}) when type in [:tcp, :ssl] do
     case Mint.HTTP.get_socket(handle.conn) do
       ^socket ->
         with {:ok, websocket, [{:binary, payload}]} <-
@@ -95,7 +95,7 @@ defmodule MQTT.Transport.Websocket do
     end
   end
 
-  def set_mode(handle, mode) do
+  def set_mode(%__MODULE__{} = handle, mode) do
     {:ok, conn} = Mint.HTTP.set_mode(handle.conn, mode)
 
     {:ok, %__MODULE__{handle | conn: conn}}

@@ -71,4 +71,24 @@ defmodule MQTT.Packet.Connack.Properties do
     shared_subscription_available server_keep_alive response_information
     server_reference authentication_method authentication_data
   )a
+
+  @type t :: %__MODULE__{
+          session_expiry_interval: non_neg_integer() | nil,
+          receive_maximum: non_neg_integer() | nil,
+          maximum_qos: non_neg_integer() | nil,
+          retain_available: non_neg_integer() | nil,
+          maximum_packet_size: non_neg_integer() | nil,
+          assigned_client_identifier: String.t() | nil,
+          topic_alias_maximum: non_neg_integer() | nil,
+          reason_string: String.t() | nil,
+          user_property: [{String.t(), String.t()}] | nil,
+          wildcard_subscription_available: non_neg_integer() | nil,
+          subscription_identifiers_available: non_neg_integer() | nil,
+          shared_subscription_available: non_neg_integer() | nil,
+          server_keep_alive: non_neg_integer() | nil,
+          response_information: String.t() | nil,
+          server_reference: String.t() | nil,
+          authentication_method: String.t() | nil,
+          authentication_data: binary() | nil
+        }
 end

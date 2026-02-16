@@ -21,45 +21,59 @@ defmodule MQTT.PacketBuilder.Connect do
     }
   end
 
-  def with_clean_start(%Connect{} = packet, value) when is_boolean(value) do
+  def with_clean_start(%Connect{flags: %Connect.Flags{} = flags} = packet, value)
+      when is_boolean(value) do
     %Connect{
       packet
-      | flags: %Connect.Flags{packet.flags | clean_start?: value}
+      | flags: %Connect.Flags{flags | clean_start?: value}
     }
   end
 
   def with_enhanced_authentication(
-        %Connect{} = packet,
+        %Connect{properties: %Connect.Properties{} = props} = packet,
         authentication_method,
         authentication_data \\ nil
       ) do
     %Connect{
       packet
       | properties: %Connect.Properties{
-          packet.properties
+          props
           | authentication_method: authentication_method,
             authentication_data: authentication_data
         }
     }
   end
 
-  def with_password(%Connect{} = packet, password) when is_binary(password) do
+  def with_password(
+        %Connect{flags: %Connect.Flags{} = flags, payload: %Connect.Payload{} = payload} = packet,
+        password
+      )
+      when is_binary(password) do
     %Connect{
       packet
-      | flags: %Connect.Flags{packet.flags | password?: true},
-        payload: %Connect.Payload{packet.payload | password: password}
+      | flags: %Connect.Flags{flags | password?: true},
+        payload: %Connect.Payload{payload | password: password}
     }
   end
 
-  def with_user_name(%Connect{} = packet, user_name) when is_binary(user_name) do
+  def with_user_name(
+        %Connect{flags: %Connect.Flags{} = flags, payload: %Connect.Payload{} = payload} = packet,
+        user_name
+      )
+      when is_binary(user_name) do
     %Connect{
       packet
-      | flags: %Connect.Flags{packet.flags | user_name?: true},
-        payload: %Connect.Payload{packet.payload | user_name: user_name}
+      | flags: %Connect.Flags{flags | user_name?: true},
+        payload: %Connect.Payload{payload | user_name: user_name}
     }
   end
 
-  def with_will_message(%Connect{} = packet, will_topic, will_payload, will_options \\ [])
+  def with_will_message(
+        %Connect{flags: %Connect.Flags{} = flags, payload: %Connect.Payload{} = payload} = packet,
+        will_topic,
+        will_payload,
+        will_options \\ []
+      )
       when is_binary(will_topic) and is_binary(will_payload) do
     will_qos = Keyword.get(will_options, :qos, @default_will_qos)
     will_retain? = Keyword.get(will_options, :retain?, @default_will_retain)
@@ -68,13 +82,13 @@ defmodule MQTT.PacketBuilder.Connect do
     %Connect{
       packet
       | flags: %Connect.Flags{
-          packet.flags
+          flags
           | will?: true,
             will_qos: will_qos,
             will_retain?: will_retain?
         },
         payload: %Connect.Payload{
-          packet.payload
+          payload
           | will_properties: will_properties,
             will_topic: will_topic,
             will_payload: will_payload

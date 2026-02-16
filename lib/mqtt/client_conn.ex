@@ -7,6 +7,32 @@ defmodule MQTT.ClientConn do
   @default_timeout_ms 30_000
   @default_reconnect_strategy ReconnectStrategy.ConstantBackoff.new(1)
 
+  @typedoc false
+  @type t :: %__MODULE__{
+          client_id: String.t() | nil,
+          connect_packet: Packet.Connect.t() | nil,
+          connect_timeout: timeout(),
+          connect_timer: reference() | nil,
+          connack_properties: Packet.Connack.Properties.t() | nil,
+          endpoint: String.t() | {String.t(), :inet.port_number()},
+          handle: term(),
+          keep_alive: non_neg_integer() | nil,
+          keep_alive_timer: reference() | nil,
+          last_packet_sent_at: integer() | nil,
+          next_topic_alias: pos_integer(),
+          ping_timer: reference() | nil,
+          read_buffer: binary(),
+          reconnect_retry_count: non_neg_integer(),
+          reconnect_strategy: struct() | nil,
+          reconnect_timer: reference() | nil,
+          session: Session.t(),
+          state: :new | :connecting | :connected | :reconnecting | :disconnected,
+          timeout: timeout(),
+          topic_aliases: %{optional(String.t()) => pos_integer()},
+          transport: module(),
+          transport_opts: keyword()
+        }
+
   defstruct [
     :client_id,
     :connect_packet,
@@ -108,6 +134,7 @@ defmodule MQTT.ClientConn do
       reconnect_strategy: Keyword.get(options, :reconnect_strategy, @default_reconnect_strategy),
       timeout: Keyword.get(options, :timeout, @default_timeout_ms),
       session: Session.new(),
+      state: :new,
       topic_aliases: %{},
       transport: transport,
       transport_opts: transport_opts
@@ -120,7 +147,7 @@ defmodule MQTT.ClientConn do
     {packet_identifier, %__MODULE__{conn | session: session}}
   end
 
-  def topic_alias(%__MODULE__{} = conn, topic) do
+  def topic_alias(%__MODULE__{} = conn, topic) when is_binary(topic) do
     if Map.has_key?(conn.topic_aliases, topic) do
       {{Map.fetch!(conn.topic_aliases, topic), ""}, conn}
     else
@@ -149,7 +176,8 @@ defmodule MQTT.ClientConn do
   end
 
   def packet_sent(%__MODULE__{} = conn, handle, packet) do
-    conn =
+    %__MODULE__{} =
+      conn =
       conn
       |> reset_keep_alive_timer()
       |> maybe_reset_ping_timer(packet)
@@ -187,31 +215,19 @@ defmodule MQTT.ClientConn do
     }
   end
 
-  def reset_keep_alive_timer(%__MODULE__{} = conn) do
-    cancel_timer!(conn.keep_alive_timer)
-
-    timer_ref =
-      if has_keep_alive?(conn) do
-        {:ok, ref} = :timer.send_after(:timer.seconds(conn.keep_alive), self(), :keep_alive)
-
-        ref
-      else
-        nil
-      end
-
-    %__MODULE__{conn | keep_alive_timer: timer_ref}
-  end
-
   def retain_available?(%__MODULE__{} = conn) do
     conn.connack_properties.retain_available
   end
 
-  def set_topic_alias_maximum(%__MODULE__{} = conn, topic_alias_maximum)
+  def set_topic_alias_maximum(
+        %__MODULE__{connack_properties: %Packet.Connack.Properties{} = props} = conn,
+        topic_alias_maximum
+      )
       when is_integer(topic_alias_maximum) do
     %__MODULE__{
       conn
       | connack_properties: %Packet.Connack.Properties{
-          conn.connack_properties
+          props
           | topic_alias_maximum: topic_alias_maximum
         }
     }
@@ -343,7 +359,7 @@ defmodule MQTT.ClientConn do
       map_size(conn.topic_aliases) < conn.connack_properties.topic_alias_maximum
   end
 
-  defp maybe_reset_ping_timer(conn, %Packet.Pingreq{}) do
+  defp maybe_reset_ping_timer(%__MODULE__{} = conn, %Packet.Pingreq{}) do
     cancel_timer!(conn.ping_timer)
 
     {:ok, timer_ref} = :timer.send_after(conn.timeout, self(), :ping_timeout)
@@ -351,7 +367,7 @@ defmodule MQTT.ClientConn do
     %__MODULE__{conn | ping_timer: timer_ref}
   end
 
-  defp maybe_reset_ping_timer(conn, _), do: conn
+  defp maybe_reset_ping_timer(%__MODULE__{} = conn, _), do: conn
 
   defp cancel_timer!(nil), do: :ok
   defp cancel_timer!(ref), do: {:ok, :cancel} = :timer.cancel(ref)
@@ -374,5 +390,20 @@ defmodule MQTT.ClientConn do
     {:ok, timer_ref} = :timer.send_after(:timer.seconds(delay_s), self(), :reconnect)
 
     timer_ref
+  end
+
+  defp reset_keep_alive_timer(%__MODULE__{} = conn) do
+    cancel_timer!(conn.keep_alive_timer)
+
+    timer_ref =
+      if has_keep_alive?(conn) do
+        {:ok, ref} = :timer.send_after(:timer.seconds(conn.keep_alive), self(), :keep_alive)
+
+        ref
+      else
+        nil
+      end
+
+    %__MODULE__{conn | keep_alive_timer: timer_ref}
   end
 end

@@ -8,6 +8,7 @@ defmodule MQTT.MixProject do
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      dialyzer: dialyzer(),
       elixirc_paths: elixirc_paths(Mix.env())
     ]
   end
@@ -24,7 +25,16 @@ defmodule MQTT.MixProject do
   defp deps do
     [
       {:castore, "~> 1.0", optional: true},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false, warn_if_outdated: true},
       {:mint_web_socket, "~> 1.0", optional: true}
+    ]
+  end
+
+  defp dialyzer do
+    [
+      plt_add_apps: [:ex_unit],
+      ignore_warnings: ".dialyzer_ignore.exs"
     ]
   end
 

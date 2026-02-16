@@ -8,10 +8,14 @@ defmodule MQTT.PacketBuilder.Disconnect do
     }
   end
 
-  def with_reason_string(%Disconnect{} = packet, reason_string) when is_binary(reason_string) do
+  def with_reason_string(
+        %Disconnect{properties: %Disconnect.Properties{} = props} = packet,
+        reason_string
+      )
+      when is_binary(reason_string) do
     %Disconnect{
       packet
-      | properties: %Disconnect.Properties{packet.properties | reason_string: reason_string}
+      | properties: %Disconnect.Properties{props | reason_string: reason_string}
     }
   end
 end

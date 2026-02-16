@@ -7,11 +7,34 @@ defmodule MQTT.Client do
 
   @default_read_timeout_ms 500
 
+  @type endpoint :: String.t() | {String.t(), :inet.port_number()}
+
+  @type connect_option ::
+          {:client_id, String.t() | nil}
+          | {:user_name, String.t()}
+          | {:password, binary()}
+          | {:keep_alive, non_neg_integer()}
+          | {:transport, module()}
+          | {:transport_opts, keyword()}
+          | {:connect_timeout, timeout()}
+          | {:timeout, timeout()}
+          | {:reconnect_strategy, struct() | nil}
+          | {:enhanced_authentication, {String.t(), binary() | nil}}
+          | {:will_message, {String.t(), binary()} | {String.t(), binary(), keyword()}}
+
+  @doc """
+  TODO: docs
+  """
   def auth(%Conn{} = conn, reason_code, authentication_method, authentication_data \\ nil) do
     packet = PacketBuilder.Auth.new(reason_code, authentication_method, authentication_data)
 
     send_packet(conn, packet)
   end
+
+  @spec connect(endpoint(), [connect_option()]) ::
+          {:ok, Packet.Connect.t(), Conn.t()}
+          | {:error, TransportError.t(), Conn.t()}
+          | {:error, :packet_too_large}
 
   def connect(endpoint, options \\ []) do
     transport = Keyword.get(options, :transport, Transport.TCP)
@@ -193,6 +216,14 @@ defmodule MQTT.Client do
     end
   end
 
+  @doc """
+  TODO: docs
+  """
+  @spec send_packet(Conn.t(), packet) ::
+          {:ok, packet, Conn.t()}
+          | {:error, TransportError.t(), Conn.t()}
+          | {:error, :packet_too_large}
+        when packet: struct()
   def send_packet(%Conn{} = conn, packet) do
     encoded_packet = Packet.encode!(packet)
 

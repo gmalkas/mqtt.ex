@@ -36,15 +36,16 @@ defmodule MQTT.PacketBuilder.Publish do
     }
   end
 
-  def with_correlation_data(%Publish{} = packet, data) do
-    %Publish{packet | properties: %Publish.Properties{packet.properties | correlation_data: data}}
+  def with_correlation_data(%Publish{properties: %Publish.Properties{} = props} = packet, data) do
+    %Publish{packet | properties: %Publish.Properties{props | correlation_data: data}}
   end
 
-  def with_dup(%Publish{} = packet, value) when is_boolean(value) do
-    %Publish{packet | flags: %Publish.Flags{packet.flags | dup?: value}}
+  def with_dup(%Publish{flags: %Publish.Flags{} = flags} = packet, value)
+      when is_boolean(value) do
+    %Publish{packet | flags: %Publish.Flags{flags | dup?: value}}
   end
 
-  def with_response_topic(%Publish{} = packet, topic) do
-    %Publish{packet | properties: %Publish.Properties{packet.properties | response_topic: topic}}
+  def with_response_topic(%Publish{properties: %Publish.Properties{} = props} = packet, topic) do
+    %Publish{packet | properties: %Publish.Properties{props | response_topic: topic}}
   end
 end

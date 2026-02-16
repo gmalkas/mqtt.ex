@@ -4,6 +4,15 @@ defmodule MQTT.Packet.Connect do
   @control_packet_type 1
   @fixed_header_flags 0
 
+  @type t :: %__MODULE__{
+          protocol_name: String.t(),
+          protocol_version: non_neg_integer(),
+          flags: __MODULE__.Flags.t(),
+          keep_alive: non_neg_integer(),
+          properties: __MODULE__.Properties.t(),
+          payload: __MODULE__.Payload.t()
+        }
+
   defstruct [:protocol_name, :protocol_version, :flags, :keep_alive, :properties, :payload]
 
   def encode!(%__MODULE__{} = packet) do
@@ -41,9 +50,30 @@ defmodule MQTT.Packet.Connect.Properties do
     authentication_method
     authentication_data
   )a
+
+  @type t :: %__MODULE__{
+          session_expiry_interval: non_neg_integer() | nil,
+          receive_maximum: non_neg_integer() | nil,
+          maximum_packet_size: non_neg_integer() | nil,
+          topic_alias_maximum: non_neg_integer() | nil,
+          request_response_information: non_neg_integer() | nil,
+          request_problem_information: non_neg_integer() | nil,
+          user_property: [{String.t(), String.t()}] | nil,
+          authentication_method: String.t() | nil,
+          authentication_data: binary() | nil
+        }
 end
 
 defmodule MQTT.Packet.Connect.Flags do
+  @type t :: %__MODULE__{
+          user_name?: boolean(),
+          password?: boolean(),
+          will_retain?: boolean(),
+          will_qos: 0..2,
+          will?: boolean(),
+          clean_start?: boolean()
+        }
+
   defstruct user_name?: false,
             password?: false,
             will_retain?: false,
@@ -65,6 +95,15 @@ end
 
 defmodule MQTT.Packet.Connect.Payload do
   alias MQTT.PacketEncoder
+
+  @type t :: %__MODULE__{
+          client_id: String.t() | nil,
+          user_name: String.t() | nil,
+          password: binary() | nil,
+          will_properties: __MODULE__.WillProperties.t() | nil,
+          will_topic: String.t() | nil,
+          will_payload: binary() | nil
+        }
 
   defstruct [:client_id, :user_name, :password, :will_properties, :will_topic, :will_payload]
 
@@ -120,4 +159,14 @@ defmodule MQTT.Packet.Connect.Payload.WillProperties do
     correlation_data
     user_property
   )a
+
+  @type t :: %__MODULE__{
+          will_delay_interval: non_neg_integer() | nil,
+          payload_format_indicator: non_neg_integer() | nil,
+          message_expiry_interval: non_neg_integer() | nil,
+          content_type: String.t() | nil,
+          response_topic: String.t() | nil,
+          correlation_data: binary() | nil,
+          user_property: [{String.t(), String.t()}] | nil
+        }
 end

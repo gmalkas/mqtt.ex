@@ -1,6 +1,13 @@
 defmodule MQTT.ClientSession do
   alias MQTT.Packet
 
+  @typedoc false
+  @type t :: %__MODULE__{
+          unacknowledged_packets: %{optional(non_neg_integer()) => struct()},
+          unacknowledged_packet_identifiers: [non_neg_integer()],
+          used_packet_identifiers: MapSet.t(non_neg_integer())
+        }
+
   defstruct unacknowledged_packets: Map.new(),
             unacknowledged_packet_identifiers: [],
             used_packet_identifiers: MapSet.new()
