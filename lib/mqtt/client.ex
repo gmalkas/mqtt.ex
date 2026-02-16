@@ -74,12 +74,13 @@ defmodule MQTT.Client do
 
     conn = Conn.new({transport, transport_opts}, endpoint, conn_options)
 
-    with {:ok, handle} <- transport.connect(endpoint, transport_opts) do
-      send_packet(
-        Conn.connecting(conn, handle, packet),
-        packet
-      )
-    else
+    case transport.connect(endpoint, transport_opts) do
+      {:ok, handle} ->
+        send_packet(
+          Conn.connecting(conn, handle, packet),
+          packet
+        )
+
       {:error, error} ->
         {:error, error, Conn.disconnected(conn)}
     end
@@ -94,7 +95,7 @@ defmodule MQTT.Client do
         end
 
       {:ok, :transport_closed} ->
-        {:ok, conn} = Conn.disconnected(conn, reconnect?: true)
+        conn = Conn.disconnected(conn, reconnect?: true)
 
         {:ok, conn, :closed}
     end
@@ -196,9 +197,12 @@ defmodule MQTT.Client do
     encoded_packet = Packet.encode!(packet)
 
     if !Conn.oversized?(conn, encoded_packet) do
-      with {:ok, handle} <- conn.transport.send(conn.handle, encoded_packet) do
-        Logger.debug("event=packet_sent, packet=#{inspect(packet)}")
-        {:ok, packet, Conn.packet_sent(conn, handle, packet)}
+      case conn.transport.send(conn.handle, encoded_packet) do
+        {:ok, handle} ->
+          {:ok, packet, Conn.packet_sent(conn, handle, packet)}
+
+        {:error, error} ->
+          {:error, error, Conn.disconnected(conn)}
       end
     else
       {:error, :packet_too_large}
@@ -211,7 +215,7 @@ defmodule MQTT.Client do
         {:ok, Conn.update_handle(conn, handle)}
 
       {:error, error} ->
-        {:error, error, conn}
+        {:error, error, Conn.disconnected(conn)}
     end
   end
 
@@ -253,23 +257,23 @@ defmodule MQTT.Client do
   end
 
   defp do_read_next_packet_from_socket(conn, buffer) do
-    with {:ok, handle, data} <- conn.transport.recv(conn.handle, 0, @default_read_timeout_ms) do
-      Logger.debug(
-        "handle=#{inspect(conn.handle)}, action=read, size=#{byte_size(data)}, data=#{Base.encode16(data)}"
-      )
+    case conn.transport.recv(conn.handle, 0, @default_read_timeout_ms) do
+      {:ok, handle, data} ->
+        buffer = buffer <> data
 
-      buffer = buffer <> data
+        case PacketDecoder.decode(buffer) do
+          {:ok, packet, buffer} ->
+            {:ok, handle, packet, buffer}
 
-      case PacketDecoder.decode(buffer) do
-        {:ok, packet, buffer} ->
-          {:ok, handle, packet, buffer}
+          {:error, :incomplete_packet} ->
+            do_read_next_packet_from_socket(Conn.update_handle(conn, handle), buffer)
 
-        {:error, :incomplete_packet} ->
-          do_read_next_packet_from_socket(Conn.update_handle(conn, handle), buffer)
+          other_error ->
+            other_error
+        end
 
-        other_error ->
-          other_error
-      end
+      {:error, error} ->
+        {:error, error, Conn.disconnected(conn)}
     end
   end
 
@@ -317,9 +321,13 @@ defmodule MQTT.Client do
   end
 
   defp decode_data(conn, message) do
-    with {:ok, handle, data} <- conn.transport.data_received(conn.handle, message) do
-      buffer = conn.read_buffer <> data
-      decode_packets(Conn.update_buffer(conn, handle, buffer), buffer)
+    case conn.transport.data_received(conn.handle, message) do
+      {:ok, handle, data} ->
+        buffer = conn.read_buffer <> data
+        decode_packets(Conn.update_buffer(conn, handle, buffer), buffer)
+
+      {:ok, :transport_closed} ->
+        {:ok, :transport_closed}
     end
   end
 

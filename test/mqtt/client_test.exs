@@ -117,7 +117,7 @@ defmodule MQTT.ClientTest do
 
       assert MQTT.Test.Tracer.wait_for_trace(tracer_port, {:connack, conn.client_id})
 
-      assert {:ok, _conn} = MQTT.Client.disconnect(conn, :disconnect_with_will_message)
+      assert _conn = MQTT.Client.disconnect(conn, :disconnect_with_will_message)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -203,7 +203,7 @@ defmodule MQTT.ClientTest do
 
       assert {:ok, _, conn} = MQTT.Client.publish(conn, topic, payload, qos: 1)
 
-      assert {:ok, conn} = MQTT.Client.disconnect(conn)
+      assert conn = MQTT.Client.disconnect(conn)
 
       assert {:ok, _, conn} = MQTT.Client.reconnect(conn)
 
@@ -276,7 +276,7 @@ defmodule MQTT.ClientTest do
     test "sends a DISCONNECT packet" do
       {:ok, conn, tracer_port} = connect_and_wait_for_connack()
 
-      assert {:ok, conn} = MQTT.Client.disconnect(conn, :normal_disconnection)
+      assert conn = MQTT.Client.disconnect(conn, :normal_disconnection)
 
       assert MQTT.Test.Tracer.wait_for_trace(
                tracer_port,
@@ -420,7 +420,8 @@ defmodule MQTT.ClientTest do
                {:publish, conn.client_id, topic}
              )
 
-      assert {:error, %TransportError{reason: :timeout}} = MQTT.Client.read_next_packet(conn)
+      assert {:error, %TransportError{reason: :timeout}, _conn} =
+               MQTT.Client.read_next_packet(conn)
     end
   end
 

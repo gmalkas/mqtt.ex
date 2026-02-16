@@ -63,15 +63,14 @@ defmodule MQTT.ClientConn do
         nil
       end
 
-    {:ok,
-     %__MODULE__{
-       conn
-       | handle: nil,
-         keep_alive_timer: nil,
-         ping_timer: nil,
-         reconnect_timer: reconnect_timer,
-         state: :disconnected
-     }}
+    %__MODULE__{
+      conn
+      | handle: nil,
+        keep_alive_timer: nil,
+        ping_timer: nil,
+        reconnect_timer: reconnect_timer,
+        state: :disconnected
+    }
   end
 
   def fetch_topic_alias(%__MODULE__{} = conn, topic) when is_binary(topic) do

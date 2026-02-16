@@ -59,73 +59,88 @@ defmodule MQTT.Client.Connection do
   end
 
   @impl true
-  def handle_call({:publish, topic_name, payload, options}, _from, state) do
+  def handle_call({:publish, topic_name, payload, options}, _from, %State{} = state) do
     case Client.publish(state.conn, topic_name, payload, options) do
       {:ok, packet, conn} ->
         {:reply, {:ok, packet}, %State{state | conn: conn}}
 
+      {:error, error, conn} ->
+        {:reply, {:error, error}, %State{state | conn: conn}}
+
       {:error, error} ->
-        # TODO: Handle errors
         {:reply, {:error, error}, state}
     end
   end
 
   @impl true
-  def handle_call({:subscribe, topic_filters}, _from, state) do
+  def handle_call({:subscribe, topic_filters}, _from, %State{} = state) do
     case Client.subscribe(state.conn, topic_filters) do
       {:ok, packet, conn} ->
         {:reply, {:ok, packet}, %State{state | conn: conn}}
 
+      {:error, error, conn} ->
+        {:reply, {:error, error}, %State{state | conn: conn}}
+
       {:error, error} ->
-        # TODO: Handle errors
         {:reply, {:error, error}, state}
     end
   end
 
   @impl true
-  def handle_call({:unsubscribe, topic_filters}, _from, state) do
+  def handle_call({:unsubscribe, topic_filters}, _from, %State{} = state) do
     case Client.unsubscribe(state.conn, topic_filters) do
       {:ok, packet, conn} ->
         {:reply, {:ok, packet}, %State{state | conn: conn}}
 
+      {:error, error, conn} ->
+        {:reply, {:error, error}, %State{state | conn: conn}}
+
       {:error, error} ->
-        # TODO: Handle errors
         {:reply, {:error, error}, state}
     end
   end
 
   @impl true
-  def handle_cast({:auth, reason_code, authentication_method, authentication_data}, state) do
+  def handle_cast(
+        {:auth, reason_code, authentication_method, authentication_data},
+        %State{} = state
+      ) do
     case Client.auth(state.conn, reason_code, authentication_method, authentication_data) do
       {:ok, _, conn} ->
         {:noreply, %State{state | conn: conn}}
 
+      {:error, _error, conn} ->
+        {:noreply, %State{state | conn: conn}}
+
       {:error, _error} ->
-        # TODO: Handle errors
         {:noreply, state}
     end
   end
 
   @impl true
-  def handle_cast({:publish, topic_name, payload, options}, state) do
+  def handle_cast({:publish, topic_name, payload, options}, %State{} = state) do
     case Client.publish(state.conn, topic_name, payload, options) do
       {:ok, _, conn} ->
         {:noreply, %State{state | conn: conn}}
 
+      {:error, _error, conn} ->
+        {:noreply, %State{state | conn: conn}}
+
       {:error, _error} ->
-        # TODO: Handle errors
         {:noreply, state}
     end
   end
 
   @impl true
-  def handle_cast({:subscribe, topic_filters}, state) do
+  def handle_cast({:subscribe, topic_filters}, %State{} = state) do
     case Client.subscribe(state.conn, topic_filters) do
       {:ok, _, conn} ->
         {:noreply, %State{state | conn: conn}}
 
+      {:error, _error, conn} ->
+        {:noreply, %State{state | conn: conn}}
+
       {:error, _error} ->
-        # TODO: Handle errors
         {:noreply, state}
     end
   end
@@ -139,7 +154,7 @@ defmodule MQTT.Client.Connection do
     # cases, retrying with the same timeout will never succeed. The user should
     # terminate this worker instance and create another one.
 
-    {:ok, conn} = Client.disconnect(state.conn)
+    conn = Client.disconnect(state.conn)
 
     next_state =
       emit_event(
@@ -164,8 +179,14 @@ defmodule MQTT.Client.Connection do
       {:ok, _, conn} ->
         {:noreply, %State{state | conn: conn}}
 
-      {:error, error} ->
-        next_state = handle_error(state, error)
+      {:error, reason, conn} ->
+        next_state =
+          handle_error(%State{state | conn: conn}, %MQTT.TransportError{reason: reason})
+
+        {:noreply, next_state}
+
+      {:error, reason} ->
+        next_state = handle_error(state, %MQTT.TransportError{reason: reason})
         {:noreply, next_state}
     end
   end
@@ -209,18 +230,14 @@ defmodule MQTT.Client.Connection do
   end
 
   @impl true
-  def handle_info(message, state) do
+  def handle_info(message, %State{} = state) do
     case Client.data_received(state.conn, message) do
       {:ok, conn, :closed} ->
-        next_state = emit_event(state, {:disconnected, :transport_closed})
+        %State{} = next_state = emit_event(state, {:disconnected, :transport_closed})
 
         {:noreply, %State{next_state | conn: conn}}
 
       {:ok, conn, packets} ->
-        Logger.debug(
-          "pid=#{inspect(self())}, event=received_packets, packets=#{inspect(packets)}"
-        )
-
         {:ok, conn} = Client.set_mode(conn, :active)
 
         next_state = handle_packets(%State{state | conn: conn}, packets)
@@ -264,13 +281,13 @@ defmodule MQTT.Client.Connection do
     end
   end
 
-  defp handle_error(state, %MQTT.Error{} = error) do
-    {:ok, conn} = Client.disconnect(state.conn, error.reason_code, Error.reason_string(error))
+  defp handle_error(%State{} = state, %MQTT.Error{} = error) do
+    conn = Client.disconnect(state.conn, error.reason_code, Error.reason_string(error))
 
     emit_event(%State{state | conn: conn}, {:error, error})
   end
 
-  defp handle_error(state, %MQTT.TransportError{} = error) do
+  defp handle_error(%State{} = state, %MQTT.TransportError{} = error) do
     emit_event(state, {:disconnected, error})
   end
 
@@ -317,9 +334,9 @@ defmodule MQTT.Client.Connection do
     |> emit_event(event)
   end
 
-  defp process_event(state, {:redirected, packet}) do
+  defp process_event(%State{} = state, {:redirected, packet}) do
     if !is_nil(packet.properties.server_reference) do
-      {:ok, _conn} = Client.disconnect(state.conn)
+      _conn = Client.disconnect(state.conn)
 
       endpoint =
         choose_endpoint(packet.properties.server_reference)
@@ -333,21 +350,21 @@ defmodule MQTT.Client.Connection do
 
       %State{conn: conn, handler: handler_mod, handler_state: handler_state}
     else
-      {:ok, conn} = Client.disconnect(state.conn)
+      conn = Client.disconnect(state.conn)
 
       %State{state | conn: conn}
     end
   end
 
-  defp process_event(state, {:disconnected, _packet}) do
-    {:ok, conn} = Client.disconnect(state.conn)
+  defp process_event(%State{} = state, {:disconnected, _packet}) do
+    conn = Client.disconnect(state.conn)
 
     %State{state | conn: conn}
   end
 
-  defp process_event(state, _), do: state
+  defp process_event(%State{} = state, _), do: state
 
-  defp emit_event(state, event) do
+  defp emit_event(%State{} = state, event) do
     {next_handler_state, actions} = dispatch_event(state.handler, state.handler_state, event)
 
     dispatch_actions(actions)
